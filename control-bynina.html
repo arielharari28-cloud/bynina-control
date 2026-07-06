@@ -322,6 +322,7 @@
     border-radius:12px;
     margin-bottom:8px;
     padding:12px 14px;
+    overflow:hidden;
   }
   .check-card-header{
     display:flex;
@@ -372,11 +373,30 @@
   }
   .check-team-tasks{
     margin-top:8px;
-    padding-top:10px;
+    padding-top:2px;
     border-top:1px dashed var(--line);
   }
-  .check-team-tasks .ticket{margin-bottom:8px;}
-  .check-team-tasks .ticket:last-child{margin-bottom:0;}
+  .check-team-item{
+    background:var(--rust-soft);
+    margin:6px -14px 0;
+    padding:8px 14px;
+    border-top:none;
+  }
+  .check-team-item:first-child{margin-top:6px;}
+  .check-team-item .ticket-check{
+    width:18px;
+    height:18px;
+    background:transparent;
+  }
+  .check-team-label{
+    flex:1;
+    font-size:13px;
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:8px;
+    cursor:default;
+  }
 
   .status-bar{
     font-family:'Inter',sans-serif;
@@ -765,7 +785,7 @@ function renderChecklist(){
       .sort((a,b)=>b.ts-a.ts);
     const teamBlock = pendingTeam.length ? `
       <div class="check-team-tasks">
-        ${pendingTeam.map(teamTicketHtml).join('')}
+        ${pendingTeam.map(teamTaskRowHtml).join('')}
       </div>
     ` : '';
     return `
@@ -1015,6 +1035,18 @@ function teamTicketHtml(t){
         </div>
         <div class="ticket-text">${escapeHtml(t.text)}</div>
       </div>
+      <button class="del-btn team-del" data-id="${t.id}" title="Eliminar">×</button>
+    </div>
+  `;
+}
+
+function teamTaskRowHtml(t){
+  const overdue = isOverdue(t.dueDate, t.resolved);
+  const dueLabel = t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '';
+  return `
+    <div class="check-item check-team-item">
+      <div class="ticket-check team-check" data-id="${t.id}">${t.resolved?'✓':''}</div>
+      <label class="check-team-label">${escapeHtml(t.text)} ${dueLabel}</label>
       <button class="del-btn team-del" data-id="${t.id}" title="Eliminar">×</button>
     </div>
   `;
