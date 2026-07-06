@@ -300,6 +300,71 @@
     line-height:1;
   }
   .del-btn:hover{color:var(--red);}
+  .edit-btn{
+    flex:0 0 auto;
+    background:none;
+    border:none;
+    color:var(--ink-soft);
+    font-size:14px;
+    cursor:pointer;
+    padding:0 2px;
+    line-height:1;
+  }
+  .edit-btn:hover{color:var(--purple);}
+
+  /* Edit task modal */
+  .modal-overlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(37,35,31,0.5);
+    z-index:100;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal-box{
+    background:var(--card);
+    border-radius:12px;
+    padding:18px;
+    width:100%;
+    max-width:420px;
+    max-height:90vh;
+    overflow-y:auto;
+  }
+  .modal-title{
+    font-family:'Poppins',sans-serif;
+    font-weight:600;
+    font-size:15px;
+    margin-bottom:14px;
+  }
+  .modal-field{margin-bottom:12px;}
+  .modal-field label{
+    display:block;
+    font-family:'Poppins',sans-serif;
+    font-size:12px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin-bottom:5px;
+  }
+  .modal-field select, .modal-field input, .modal-field textarea{
+    width:100%;
+    min-height:auto;
+  }
+  .modal-field textarea{min-height:70px;}
+  .modal-footer{
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    margin-top:6px;
+  }
+  .modal-footer button{padding:0 16px;height:34px;}
+  .modal-cancel-btn{
+    background:none;
+    color:var(--ink-soft);
+    border:1px solid var(--line);
+  }
 
   .empty{
     font-family:'Inter',sans-serif;
@@ -682,6 +747,28 @@
   <div class="status-bar" id="status-bar">cargando...</div>
 </div>
 
+<div class="modal-overlay" id="edit-task-modal">
+  <div class="modal-box">
+    <div class="modal-title">Editar tarea</div>
+    <div class="modal-field">
+      <label for="edit-task-person">Persona</label>
+      <select id="edit-task-person"></select>
+    </div>
+    <div class="modal-field">
+      <label for="edit-task-due">Vence</label>
+      <input type="date" id="edit-task-due">
+    </div>
+    <div class="modal-field">
+      <label for="edit-task-text">Tarea</label>
+      <textarea id="edit-task-text"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-cancel-btn" id="edit-task-cancel">Cancelar</button>
+      <button id="edit-task-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 firebase.initializeApp({
   apiKey:"AIzaSyBqZ9ZkYfcDfXVEIGVsZM5_cByJkBXhVeA",
@@ -831,6 +918,9 @@ function renderChecklist(){
       await saveTeamTasks();
     });
   });
+  el.querySelectorAll('.team-edit').forEach(btn=>{
+    btn.addEventListener('click', ()=>openEditTeamTask(btn.dataset.id));
+  });
 }
 
 function fmtTime(ts){
@@ -881,6 +971,9 @@ function renderLists(){
   });
   document.querySelectorAll('#pending-list .team-del, #resolved-list .team-del').forEach(btn=>{
     btn.addEventListener('click', ()=>deleteTeamTask(btn.dataset.id));
+  });
+  document.querySelectorAll('#pending-list .team-edit, #resolved-list .team-edit').forEach(btn=>{
+    btn.addEventListener('click', ()=>openEditTeamTask(btn.dataset.id));
   });
 }
 
@@ -1035,6 +1128,7 @@ function teamTicketHtml(t){
         </div>
         <div class="ticket-text">${escapeHtml(t.text)}</div>
       </div>
+      <button class="edit-btn team-edit" data-id="${t.id}" title="Editar">✎</button>
       <button class="del-btn team-del" data-id="${t.id}" title="Eliminar">×</button>
     </div>
   `;
@@ -1047,6 +1141,7 @@ function teamTaskRowHtml(t){
     <div class="check-item check-team-item">
       <div class="ticket-check team-check" data-id="${t.id}">${t.resolved?'✓':''}</div>
       <label class="check-team-label">${escapeHtml(t.text)} ${dueLabel}</label>
+      <button class="edit-btn team-edit" data-id="${t.id}" title="Editar">✎</button>
       <button class="del-btn team-del" data-id="${t.id}" title="Eliminar">×</button>
     </div>
   `;
@@ -1082,6 +1177,49 @@ document.getElementById('team-task-text').addEventListener('keydown', (e)=>{
     e.preventDefault();
     addTeamTask();
   }
+});
+
+let editingTeamTaskId = null;
+
+function populateEditPersonSelect(){
+  const sel = document.getElementById('edit-task-person');
+  sel.innerHTML = Object.keys(PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('');
+}
+
+function openEditTeamTask(id){
+  const t = teamTasks.find(x=>x.id===id);
+  if(!t) return;
+  editingTeamTaskId = id;
+  populateEditPersonSelect();
+  document.getElementById('edit-task-person').value = t.person;
+  document.getElementById('edit-task-due').value = t.dueDate || '';
+  document.getElementById('edit-task-text').value = t.text;
+  document.getElementById('edit-task-modal').classList.add('open');
+}
+
+function closeEditTeamTask(){
+  editingTeamTaskId = null;
+  document.getElementById('edit-task-modal').classList.remove('open');
+}
+
+async function saveEditTeamTask(){
+  const t = teamTasks.find(x=>x.id===editingTeamTaskId);
+  if(!t) return;
+  const newText = document.getElementById('edit-task-text').value.trim();
+  if(!newText) return;
+  t.text = newText;
+  t.person = document.getElementById('edit-task-person').value;
+  t.dueDate = document.getElementById('edit-task-due').value || '';
+  closeEditTeamTask();
+  renderLists();
+  renderChecklist();
+  await saveTeamTasks();
+}
+
+document.getElementById('edit-task-cancel').addEventListener('click', closeEditTeamTask);
+document.getElementById('edit-task-save').addEventListener('click', saveEditTeamTask);
+document.getElementById('edit-task-modal').addEventListener('click', (e)=>{
+  if(e.target.id === 'edit-task-modal') closeEditTeamTask();
 });
 
 (async function init(){
