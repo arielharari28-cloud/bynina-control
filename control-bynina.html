@@ -370,6 +370,13 @@
     text-decoration:line-through;
     color:var(--ink-soft);
   }
+  .check-team-tasks{
+    margin-top:8px;
+    padding-top:10px;
+    border-top:1px dashed var(--line);
+  }
+  .check-team-tasks .ticket{margin-bottom:8px;}
+  .check-team-tasks .ticket:last-child{margin-bottom:0;}
 
   .status-bar{
     font-family:'Inter',sans-serif;
@@ -581,6 +588,7 @@
     <div class="capture-label">Crear tarea puntual (les aparece a ellos)</div>
     <div class="capture-row">
       <select id="team-person">
+        <option value="general">General</option>
         <option value="emir">Emir</option>
         <option value="aripchico">Ari Chico</option>
         <option value="ale">Ale</option>
@@ -595,28 +603,6 @@
       <input type="date" id="team-due-date">
       <textarea id="team-task-text" placeholder="Qué necesitás que haga..."></textarea>
       <button id="team-add-btn">Crear</button>
-    </div>
-  </div>
-  <div id="team-tasks-list"></div>
-
-  <div class="capture">
-    <div class="capture-label">Anotar algo que surgió</div>
-    <div class="capture-row">
-      <select id="person">
-        <option value="general">General</option>
-        <option value="emir">Emir</option>
-        <option value="aripchico">Ari Chico</option>
-        <option value="ale">Ale</option>
-        <option value="noemi">Noemi</option>
-        <option value="flor">Flor</option>
-        <option value="carol">Carol</option>
-        <option value="noelia">Noelia</option>
-        <option value="stef">Stef</option>
-        <option value="meli">Meli</option>
-        <option value="nahuel">Nahuel</option>
-      </select>
-      <textarea id="note-text" placeholder="Qué pasó, qué falta resolver..."></textarea>
-      <button id="add-btn">Guardar</button>
     </div>
   </div>
 
@@ -698,13 +684,11 @@ async function fbSet(path, value){
   return db.ref(path).set(value);
 }
 
-const STORAGE_KEY = 'control-bynina:notes';
 const PEOPLE = {
   general:'General', emir:'Emir', aripchico:'Ari Chico', ale:'Ale',
   noemi:'Noemi', flor:'Flor', carol:'Carol', noelia:'Noelia',
   stef:'Stef', meli:'Meli', nahuel:'Nahuel'
 };
-let notes = [];
 let activeFilter = 'todos';
 
 const checklistData = [
@@ -776,6 +760,14 @@ function renderChecklist(){
     const total = sec.items.length;
     const done = sec.items.filter(it => checklistState[it.id]).length;
     const progressClass = done === 0 ? 'zero' : '';
+    const personKey = Object.keys(PEOPLE).find(k => PEOPLE[k] === sec.person);
+    const pendingTeam = teamTasks.filter(t => !t.resolved && t.person === personKey)
+      .sort((a,b)=>b.ts-a.ts);
+    const teamBlock = pendingTeam.length ? `
+      <div class="check-team-tasks">
+        ${pendingTeam.map(teamTicketHtml).join('')}
+      </div>
+    ` : '';
     return `
       <div class="check-card">
         <div class="check-card-header">
@@ -788,6 +780,7 @@ function renderChecklist(){
             <label for="chk-${it.id}">${it.label}</label>
           </div>
         `).join('')}
+        ${teamBlock}
       </div>
     `;
   }).join('');
@@ -797,6 +790,25 @@ function renderChecklist(){
       const id = cb.id.replace('chk-','');
       await saveChecklistItem(id, cb.checked);
       renderChecklist();
+    });
+  });
+
+  el.querySelectorAll('.team-check').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const t = teamTasks.find(x=>x.id===btn.dataset.id);
+      if(!t) return;
+      t.resolved = !t.resolved;
+      renderChecklist();
+      renderLists();
+      await saveTeamTasks();
+    });
+  });
+  el.querySelectorAll('.team-del').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      teamTasks = teamTasks.filter(x=>x.id!==btn.dataset.id);
+      renderChecklist();
+      renderLists();
+      await saveTeamTasks();
     });
   });
 }
@@ -814,24 +826,6 @@ function setStatus(text){
   document.getElementById('status-bar').textContent = text;
 }
 
-async function loadNotes(){
-  try{
-    const val = await fbGet('control_bynina/notes');
-    notes = val ? JSON.parse(val) : [];
-  }catch(e){
-    notes = [];
-  }
-}
-
-async function saveNotes(){
-  try{
-    await fbSet('control_bynina/notes', JSON.stringify(notes));
-    setStatus('guardado ' + fmtTime(Date.now()));
-  }catch(e){
-    setStatus('error al guardar');
-  }
-}
-
 function renderFilters(){
   const el = document.getElementById('filters');
   const keys = ['todos', ...Object.keys(PEOPLE)];
@@ -844,6 +838,7 @@ function renderFilters(){
       activeFilter = c.dataset.key;
       renderFilters();
       renderLists();
+      renderChecklist();
     });
   });
 }
@@ -852,37 +847,21 @@ function renderLists(){
   const pendingEl = document.getElementById('pending-list');
   const resolvedEl = document.getElementById('resolved-list');
 
-  const filtered = activeFilter==='todos' ? notes : notes.filter(n=>n.person===activeFilter);
-  const pending = filtered.filter(n=>!n.resolved).sort((a,b)=>b.ts-a.ts);
-  const resolved = filtered.filter(n=>n.resolved).sort((a,b)=>b.ts-a.ts);
+  const filtered = activeFilter==='todos' ? teamTasks : teamTasks.filter(t=>t.person===activeFilter);
+  const pending = filtered.filter(t=>!t.resolved).sort((a,b)=>b.ts-a.ts);
+  const resolved = filtered.filter(t=>t.resolved).sort((a,b)=>b.ts-a.ts);
 
-  pendingEl.innerHTML = pending.length ? pending.map(ticketHtml).join('') :
+  pendingEl.innerHTML = pending.length ? pending.map(teamTicketHtml).join('') :
     '<div class="empty">No hay pendientes acá. Buen momento para respirar.</div>';
-  resolvedEl.innerHTML = resolved.length ? resolved.map(ticketHtml).join('') :
+  resolvedEl.innerHTML = resolved.length ? resolved.map(teamTicketHtml).join('') :
     '<div class="empty">Todavía nada marcado como resuelto.</div>';
 
-  document.querySelectorAll('#pending-list .ticket-check, #resolved-list .ticket-check').forEach(btn=>{
-    btn.addEventListener('click', ()=>toggleResolved(btn.dataset.id));
+  document.querySelectorAll('#pending-list .team-check, #resolved-list .team-check').forEach(btn=>{
+    btn.addEventListener('click', ()=>toggleTeamTaskResolved(btn.dataset.id));
   });
-  document.querySelectorAll('#pending-list .del-btn, #resolved-list .del-btn').forEach(btn=>{
-    btn.addEventListener('click', ()=>deleteNote(btn.dataset.id));
+  document.querySelectorAll('#pending-list .team-del, #resolved-list .team-del').forEach(btn=>{
+    btn.addEventListener('click', ()=>deleteTeamTask(btn.dataset.id));
   });
-}
-
-function ticketHtml(n){
-  return `
-    <div class="ticket ${n.resolved?'resolved':''}">
-      <div class="ticket-check" data-id="${n.id}">${n.resolved?'✓':''}</div>
-      <div class="ticket-body">
-        <div class="ticket-meta">
-          <span class="tag ${n.person}">${PEOPLE[n.person] || n.person}</span>
-          <span class="ticket-time">${fmtTime(n.ts)}</span>
-        </div>
-        <div class="ticket-text">${escapeHtml(n.text)}</div>
-      </div>
-      <button class="del-btn" data-id="${n.id}" title="Eliminar">×</button>
-    </div>
-  `;
 }
 
 function escapeHtml(str){
@@ -891,40 +870,22 @@ function escapeHtml(str){
   return div.innerHTML;
 }
 
-async function toggleResolved(id){
-  const n = notes.find(x=>x.id===id);
-  if(!n) return;
-  n.resolved = !n.resolved;
+async function toggleTeamTaskResolved(id){
+  const t = teamTasks.find(x=>x.id===id);
+  if(!t) return;
+  t.resolved = !t.resolved;
   renderLists();
-  await saveNotes();
+  renderChecklist();
+  await saveTeamTasks();
 }
 
-async function deleteNote(id){
-  notes = notes.filter(x=>x.id!==id);
+async function deleteTeamTask(id){
+  teamTasks = teamTasks.filter(x=>x.id!==id);
   renderLists();
-  await saveNotes();
+  renderChecklist();
+  await saveTeamTasks();
 }
 
-async function addNote(){
-  const textEl = document.getElementById('note-text');
-  const personEl = document.getElementById('person');
-  const text = textEl.value.trim();
-  if(!text) return;
-  const btn = document.getElementById('add-btn');
-  btn.disabled = true;
-  notes.push({
-    id: 'n' + Date.now() + Math.random().toString(36).slice(2,7),
-    person: personEl.value,
-    text: text,
-    ts: Date.now(),
-    resolved: false
-  });
-  textEl.value = '';
-  renderLists();
-  await saveNotes();
-  btn.disabled = false;
-  textEl.focus();
-}
 
 function renderToday(){
   const d = new Date();
@@ -1022,34 +983,10 @@ async function loadTeamTasks(){
 async function saveTeamTasks(){
   try{
     await fbSet('control_bynina/team_tasks', JSON.stringify(teamTasks));
-  }catch(e){}
-}
-
-function renderTeamTasks(){
-  const el = document.getElementById('team-tasks-list');
-  const pending = teamTasks.filter(t=>!t.resolved).sort((a,b)=>b.ts-a.ts);
-  const resolved = teamTasks.filter(t=>t.resolved).sort((a,b)=>b.ts-a.ts);
-  if(!teamTasks.length){
-    el.innerHTML = '<div class="empty">No hay tareas puntuales creadas todavía.</div>';
-    return;
+    setStatus('guardado ' + fmtTime(Date.now()));
+  }catch(e){
+    setStatus('error al guardar');
   }
-  el.innerHTML = pending.map(teamTicketHtml).join('') + resolved.map(teamTicketHtml).join('');
-  el.querySelectorAll('.team-check').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const t = teamTasks.find(x=>x.id===btn.dataset.id);
-      if(!t) return;
-      t.resolved = !t.resolved;
-      renderTeamTasks();
-      await saveTeamTasks();
-    });
-  });
-  el.querySelectorAll('.team-del').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      teamTasks = teamTasks.filter(x=>x.id!==btn.dataset.id);
-      renderTeamTasks();
-      await saveTeamTasks();
-    });
-  });
 }
 
 function fmtDue(dueStr){
@@ -1100,7 +1037,8 @@ async function addTeamTask(){
     resolved: false
   });
   textEl.value = '';
-  renderTeamTasks();
+  renderLists();
+  renderChecklist();
   await saveTeamTasks();
   btn.disabled = false;
   textEl.focus();
@@ -1114,27 +1052,17 @@ document.getElementById('team-task-text').addEventListener('keydown', (e)=>{
   }
 });
 
-document.getElementById('add-btn').addEventListener('click', addNote);
-document.getElementById('note-text').addEventListener('keydown', (e)=>{
-  if(e.key === 'Enter' && !e.shiftKey){
-    e.preventDefault();
-    addNote();
-  }
-});
-
 (async function init(){
   renderToday();
   renderFilters();
   document.getElementById('team-due-date').value = todayKey();
   setStatus('cargando...');
-  await loadNotes();
   await loadPlan();
   await loadEditMode();
   await loadChecklist();
   await loadTeamTasks();
   renderLists();
   renderChecklist();
-  renderTeamTasks();
   setStatus('listo — se guarda solo en este dispositivo');
 })();
 
