@@ -654,6 +654,42 @@
   .tag.diverso{background:var(--green-soft);color:var(--green);}
   .tag.farb{background:var(--rust-soft);color:var(--rust);}
   .tag.otros{background:#d9e9e9;color:#2c6b6b;}
+
+  /* Resumen del día (Mi Día) */
+  .day-summary-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:14px 16px;
+    margin-bottom:24px;
+  }
+  .summary-row{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    padding:7px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .summary-row:last-child{border-bottom:none;}
+  .summary-row.done .summary-text{
+    text-decoration:line-through;
+    color:var(--ink-soft);
+  }
+  .summary-time{
+    font-family:'Poppins',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    color:var(--purple);
+    flex:0 0 46px;
+  }
+  .summary-text{font-size:14px;}
+  .summary-subtitle{
+    font-family:'Poppins',sans-serif;
+    font-size:12px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin:10px 0 4px;
+  }
 </style>
 </head>
 <body>
@@ -740,6 +776,9 @@
       <button id="next-day">›</button>
     </div>
 
+    <div class="section-title st-green">Resumen de tu día</div>
+    <div class="day-summary-card" id="day-summary"></div>
+
     <div class="section-title st-purple" id="agenda-section-title">Agenda de hoy</div>
     <div class="capture">
       <div class="capture-row">
@@ -762,6 +801,7 @@
           <option value="personal">Personal</option>
         </select>
         <input type="date" id="task-due-date">
+        <input type="time" id="task-time-input">
         <textarea id="task-text-input" placeholder="Qué tenés que hacer..."></textarea>
         <button id="task-add-btn">Agregar</button>
       </div>
@@ -795,6 +835,39 @@
     <div class="modal-footer">
       <button class="modal-cancel-btn" id="edit-task-cancel">Cancelar</button>
       <button id="edit-task-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="edit-ptask-modal">
+  <div class="modal-box">
+    <div class="modal-title">Editar tarea</div>
+    <div class="modal-field">
+      <label for="edit-ptask-area">Área</label>
+      <select id="edit-ptask-area">
+        <option value="nina">By Nina</option>
+        <option value="embrujo">Embrujo</option>
+        <option value="diverso">Diverso</option>
+        <option value="farb">Farb</option>
+        <option value="otros">Otros clientes</option>
+        <option value="personal">Personal</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label for="edit-ptask-due">Vence</label>
+      <input type="date" id="edit-ptask-due">
+    </div>
+    <div class="modal-field">
+      <label for="edit-ptask-time">Horario</label>
+      <input type="time" id="edit-ptask-time">
+    </div>
+    <div class="modal-field">
+      <label for="edit-ptask-text">Tarea</label>
+      <textarea id="edit-ptask-text"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-cancel-btn" id="edit-ptask-cancel">Cancelar</button>
+      <button id="edit-ptask-save">Guardar</button>
     </div>
   </div>
 </div>
@@ -1495,6 +1568,7 @@ function renderAgenda(){
       window.open(img.dataset.full, '_blank');
     });
   });
+  renderDaySummary();
 }
 
 async function addAgendaItem(){
@@ -1587,16 +1661,19 @@ function renderTaskFilters(){
 function personalTaskHtml(t){
   const overdue = isOverdue(t.dueDate, t.resolved);
   const dueLabel = t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '';
+  const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   return `
     <div class="ticket ${t.resolved?'resolved':''}">
       <div class="ticket-check ptask-check" data-id="${t.id}">${t.resolved?'✓':''}</div>
       <div class="ticket-body">
         <div class="ticket-meta">
           <span class="tag ${t.area}">${AREAS[t.area] || t.area}</span>
+          ${timeLabel}
           ${dueLabel}
         </div>
         <div class="ticket-text">${escapeHtml(t.text)}</div>
       </div>
+      <button class="edit-btn ptask-edit" data-id="${t.id}" title="Editar">✎</button>
       <button class="del-btn ptask-del" data-id="${t.id}" title="Eliminar">×</button>
     </div>
   `;
@@ -1606,7 +1683,11 @@ function renderPersonalTasks(){
   const el = document.getElementById('task-list');
   const filtered = taskFilter==='todas' ? personalTasks : personalTasks.filter(t=>t.area===taskFilter);
   const pending = filtered.filter(t=>!t.resolved).sort((a,b)=>{
-    if(a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+    if(a.dueDate && b.dueDate){
+      const cmp = a.dueDate.localeCompare(b.dueDate);
+      if(cmp !== 0) return cmp;
+      return (a.time||'').localeCompare(b.time||'');
+    }
     if(a.dueDate) return -1;
     if(b.dueDate) return 1;
     return b.ts - a.ts;
@@ -1614,6 +1695,7 @@ function renderPersonalTasks(){
   const resolved = filtered.filter(t=>t.resolved).sort((a,b)=>b.ts-a.ts);
   if(!filtered.length){
     el.innerHTML = '<div class="empty">No hay tareas acá.</div>';
+    renderDaySummary();
     return;
   }
   el.innerHTML = pending.map(personalTaskHtml).join('') + resolved.map(personalTaskHtml).join('');
@@ -1626,6 +1708,11 @@ function renderPersonalTasks(){
       await savePersonalTasks();
     });
   });
+  el.querySelectorAll('.ptask-edit').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      openEditPersonalTask(btn.dataset.id);
+    });
+  });
   el.querySelectorAll('.ptask-del').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       personalTasks = personalTasks.filter(x=>x.id!==btn.dataset.id);
@@ -1633,12 +1720,14 @@ function renderPersonalTasks(){
       await savePersonalTasks();
     });
   });
+  renderDaySummary();
 }
 
 async function addPersonalTask(){
   const textEl = document.getElementById('task-text-input');
   const areaEl = document.getElementById('task-area');
   const dueEl = document.getElementById('task-due-date');
+  const timeEl = document.getElementById('task-time-input');
   const text = textEl.value.trim();
   if(!text) return;
   const btn = document.getElementById('task-add-btn');
@@ -1648,10 +1737,12 @@ async function addPersonalTask(){
     area: areaEl.value,
     text: text,
     dueDate: dueEl.value || '',
+    time: timeEl.value || '',
     ts: Date.now(),
     resolved: false
   });
   textEl.value = '';
+  timeEl.value = '';
   renderPersonalTasks();
   await savePersonalTasks();
   btn.disabled = false;
@@ -1665,6 +1756,84 @@ document.getElementById('task-text-input').addEventListener('keydown', (e)=>{
     addPersonalTask();
   }
 });
+
+let editingPersonalTaskId = null;
+
+function openEditPersonalTask(id){
+  const t = personalTasks.find(x=>x.id===id);
+  if(!t) return;
+  editingPersonalTaskId = id;
+  document.getElementById('edit-ptask-area').value = t.area;
+  document.getElementById('edit-ptask-due').value = t.dueDate || '';
+  document.getElementById('edit-ptask-time').value = t.time || '';
+  document.getElementById('edit-ptask-text').value = t.text;
+  document.getElementById('edit-ptask-modal').classList.add('open');
+}
+
+function closeEditPersonalTask(){
+  editingPersonalTaskId = null;
+  document.getElementById('edit-ptask-modal').classList.remove('open');
+}
+
+async function saveEditPersonalTask(){
+  const t = personalTasks.find(x=>x.id===editingPersonalTaskId);
+  if(!t) return;
+  const newText = document.getElementById('edit-ptask-text').value.trim();
+  if(!newText) return;
+  t.text = newText;
+  t.area = document.getElementById('edit-ptask-area').value;
+  t.dueDate = document.getElementById('edit-ptask-due').value || '';
+  t.time = document.getElementById('edit-ptask-time').value || '';
+  closeEditPersonalTask();
+  renderPersonalTasks();
+  await savePersonalTasks();
+}
+
+document.getElementById('edit-ptask-cancel').addEventListener('click', closeEditPersonalTask);
+document.getElementById('edit-ptask-save').addEventListener('click', saveEditPersonalTask);
+document.getElementById('edit-ptask-modal').addEventListener('click', (e)=>{
+  if(e.target.id === 'edit-ptask-modal') closeEditPersonalTask();
+});
+
+function renderDaySummary(){
+  const el = document.getElementById('day-summary');
+  if(!el) return;
+  const todayStr = dateKey(currentDate);
+  const agendaEntries = (agendaItems||[]).map(it => ({
+    time: it.time || '',
+    text: it.text,
+    done: !!it.done
+  }));
+  const taskEntries = (personalTasks||[])
+    .filter(t => !t.resolved && t.dueDate === todayStr)
+    .map(t => ({
+      time: t.time || '',
+      text: `${AREAS[t.area] || t.area} — ${t.text}`,
+      done: false
+    }));
+  const all = [...agendaEntries, ...taskEntries];
+  if(!all.length){
+    el.innerHTML = '<div class="empty">Sin pendientes para este día.</div>';
+    return;
+  }
+  const withTime = all.filter(e=>e.time).sort((a,b)=>a.time.localeCompare(b.time));
+  const noTime = all.filter(e=>!e.time);
+  let html = withTime.map(e => `
+    <div class="summary-row ${e.done?'done':''}">
+      <span class="summary-time">${e.time}</span>
+      <span class="summary-text">${escapeHtml(e.text)}</span>
+    </div>
+  `).join('');
+  if(noTime.length){
+    html += `<div class="summary-subtitle">Sin horario fijo</div>`;
+    html += noTime.map(e => `
+      <div class="summary-row ${e.done?'done':''}">
+        <span class="summary-text">${escapeHtml(e.text)}</span>
+      </div>
+    `).join('');
+  }
+  el.innerHTML = html;
+}
 
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
