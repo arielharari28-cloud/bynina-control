@@ -773,6 +773,25 @@
     <div class="datestamp" id="employee-today"></div>
   </header>
   <div id="employee-checklist"></div>
+
+  <div class="section-title st-rust">Agregar tarea</div>
+  <div class="capture">
+    <div class="capture-row">
+      <input type="date" id="employee-due-date">
+      <input type="time" id="employee-time-input">
+      <textarea id="employee-task-text" placeholder="Qué tenés que hacer..."></textarea>
+      <button id="employee-add-btn">Agregar</button>
+    </div>
+    <label class="check-row">
+      <input type="checkbox" id="employee-involve-boss">
+      Que esto también le aparezca a Ariel
+    </label>
+    <label class="check-row">
+      <input type="checkbox" id="employee-repeat-daily">
+      🔁 Se repite todos los días
+    </label>
+  </div>
+
   <div class="section-title st-red">Pendientes</div>
   <div id="employee-pending-list"></div>
   <div class="section-title st-green">Resueltos</div>
@@ -783,7 +802,7 @@
 <div class="modal-overlay" id="edit-task-modal">
   <div class="modal-box">
     <div class="modal-title">Editar tarea</div>
-    <div class="modal-field">
+    <div class="modal-field" id="edit-task-person-field">
       <label for="edit-task-person">Persona</label>
       <select id="edit-task-person"></select>
     </div>
@@ -1335,6 +1354,7 @@ function employeeTicketHtml(t){
         <div class="ticket-text">${escapeHtml(t.text)}</div>
       </div>
       ${postponeBtn}
+      <button class="edit-btn employee-edit" data-id="${t.id}" title="Editar">✎</button>
     </div>
   `;
 }
@@ -1401,6 +1421,9 @@ function renderEmployeeView(){
   });
   document.querySelectorAll('#employee-pending-list .employee-postpone, #employee-resolved-list .employee-postpone').forEach(btn=>{
     btn.addEventListener('click', ()=>postponeTeamTask(btn.dataset.id));
+  });
+  document.querySelectorAll('#employee-pending-list .employee-edit, #employee-resolved-list .employee-edit').forEach(btn=>{
+    btn.addEventListener('click', ()=>openEditTeamTask(btn.dataset.id));
   });
 }
 
@@ -1489,6 +1512,55 @@ document.getElementById('team-task-text').addEventListener('keydown', (e)=>{
   }
 });
 
+/* ===== Vista de empleado: agregar su propia tarea ===== */
+async function addEmployeeTask(){
+  const textEl = document.getElementById('employee-task-text');
+  const dueEl = document.getElementById('employee-due-date');
+  const timeEl = document.getElementById('employee-time-input');
+  const involveEl = document.getElementById('employee-involve-boss');
+  const repeatEl = document.getElementById('employee-repeat-daily');
+  const text = textEl.value.trim();
+  if(!text) return;
+  const btn = document.getElementById('employee-add-btn');
+  btn.disabled = true;
+  const dueDate = dueEl.value || '';
+  const time = timeEl.value || '';
+  const involveBoss = involveEl.checked;
+  const repeatDaily = repeatEl.checked;
+  const newTeamTask = {
+    id: 't' + Date.now() + Math.random().toString(36).slice(2,7),
+    person: employeePersona,
+    text: text,
+    dueDate: dueDate,
+    time: time,
+    ts: Date.now(),
+    resolved: false,
+    repeatDaily: repeatDaily
+  };
+  teamTasks.push(newTeamTask);
+  textEl.value = '';
+  timeEl.value = '';
+  renderEmployeeView();
+  await saveTeamTasks();
+  if(involveBoss){
+    const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTeamTask.id, repeatDaily);
+    newTeamTask.linkedPersonalTaskId = linkedId;
+    await saveTeamTasks();
+  }
+  involveEl.checked = false;
+  repeatEl.checked = false;
+  btn.disabled = false;
+  textEl.focus();
+}
+
+document.getElementById('employee-add-btn').addEventListener('click', addEmployeeTask);
+document.getElementById('employee-task-text').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter' && !e.shiftKey){
+    e.preventDefault();
+    addEmployeeTask();
+  }
+});
+
 let editingTeamTaskId = null;
 
 function populateEditPersonSelect(){
@@ -1506,6 +1578,7 @@ function openEditTeamTask(id){
   document.getElementById('edit-task-time').value = t.time || '';
   document.getElementById('edit-task-text').value = t.text;
   document.getElementById('edit-task-repeat').checked = !!t.repeatDaily;
+  document.getElementById('edit-task-person-field').style.display = employeePersona ? 'none' : '';
   document.getElementById('edit-task-modal').classList.add('open');
 }
 
@@ -1520,13 +1593,17 @@ async function saveEditTeamTask(){
   const newText = document.getElementById('edit-task-text').value.trim();
   if(!newText) return;
   t.text = newText;
-  t.person = document.getElementById('edit-task-person').value;
+  t.person = employeePersona ? employeePersona : document.getElementById('edit-task-person').value;
   t.dueDate = document.getElementById('edit-task-due').value || '';
   t.time = document.getElementById('edit-task-time').value || '';
   t.repeatDaily = document.getElementById('edit-task-repeat').checked;
   closeEditTeamTask();
-  renderLists();
-  renderChecklist();
+  if(employeePersona){
+    renderEmployeeView();
+  } else {
+    renderLists();
+    renderChecklist();
+  }
   await saveTeamTasks();
 }
 
@@ -1551,6 +1628,7 @@ document.getElementById('edit-task-modal').addEventListener('click', (e)=>{
   if(employeePersona){
     document.getElementById('admin-wrap').style.display = 'none';
     document.getElementById('employee-wrap').style.display = '';
+    document.getElementById('employee-due-date').value = todayKey();
     renderEmployeeView();
     setStatus('listo');
   }
