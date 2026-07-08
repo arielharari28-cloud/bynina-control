@@ -1050,7 +1050,16 @@ function renderLists(){
 
   const filtered = activeFilter==='todos' ? teamTasks : teamTasks.filter(t=>t.person===activeFilter);
   const todayStr = todayKey();
-  const pending = filtered.filter(t=>!isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
+  const pending = filtered.filter(t=>!isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
+    if(a.dueDate && b.dueDate){
+      const cmp = a.dueDate.localeCompare(b.dueDate);
+      if(cmp !== 0) return cmp;
+      return (a.time||'').localeCompare(b.time||'');
+    }
+    if(a.dueDate) return -1;
+    if(b.dueDate) return 1;
+    return b.ts - a.ts;
+  });
   const resolved = filtered.filter(t=>isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
 
   pendingEl.innerHTML = pending.length ? pending.map(teamTicketHtml).join('') :
