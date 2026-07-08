@@ -608,6 +608,17 @@
     padding:7px 0;
     border-bottom:1px solid var(--line);
   }
+  .summary-check{
+    flex:0 0 auto;
+    width:18px;
+    height:18px;
+    border-radius:50%;
+    border:2px solid var(--line);
+    cursor:pointer;
+    background:#fff;
+    align-self:center;
+  }
+  .summary-check:hover{border-color:var(--green);}
   .summary-row:last-child{border-bottom:none;}
   .summary-row.done .summary-text{
     text-decoration:line-through;
@@ -985,14 +996,7 @@ function renderChecklist(){
   });
 
   el.querySelectorAll('.team-check').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const t = teamTasks.find(x=>x.id===btn.dataset.id);
-      if(!t) return;
-      toggleTaskDoneForDate(t, todayKey());
-      renderChecklist();
-      renderLists();
-      await saveTeamTasks();
-    });
+    btn.addEventListener('click', ()=>toggleTeamTaskResolved(btn.dataset.id));
   });
   el.querySelectorAll('.team-del').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
@@ -1077,10 +1081,19 @@ function escapeHtml(str){
 async function toggleTeamTaskResolved(id){
   const t = teamTasks.find(x=>x.id===id);
   if(!t) return;
-  toggleTaskDoneForDate(t, todayKey());
+  const today = todayKey();
+  toggleTaskDoneForDate(t, today);
   renderLists();
   renderChecklist();
   await saveTeamTasks();
+  if(t.linkedPersonalTaskId){
+    const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
+    if(pt && isTaskDoneForDate(pt, today) !== isTaskDoneForDate(t, today)){
+      toggleTaskDoneForDate(pt, today);
+      renderPersonalTasks();
+      await savePersonalTasks();
+    }
+  }
 }
 
 async function postponeTeamTask(id){
@@ -1274,7 +1287,7 @@ async function addTeamTask(){
   const time = timeEl.value || '';
   const involveMe = involveEl.checked;
   const repeatDaily = repeatEl.checked;
-  teamTasks.push({
+  const newTeamTask = {
     id: 't' + Date.now() + Math.random().toString(36).slice(2,7),
     person: personEl.value,
     text: text,
@@ -1283,14 +1296,17 @@ async function addTeamTask(){
     ts: Date.now(),
     resolved: false,
     repeatDaily: repeatDaily
-  });
+  };
+  teamTasks.push(newTeamTask);
   textEl.value = '';
   timeEl.value = '';
   renderLists();
   renderChecklist();
   await saveTeamTasks();
   if(involveMe){
-    await addToMyTasksForDate(dueDate || todayKey(), time, text);
+    const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTeamTask.id, repeatDaily);
+    newTeamTask.linkedPersonalTaskId = linkedId;
+    await saveTeamTasks();
     setStatus('guardado y agregado a tu día');
   }
   involveEl.checked = false;
@@ -1395,20 +1411,24 @@ function isSameDay(d1,d2){
   return dateKey(d1) === dateKey(d2);
 }
 
-async function addToMyTasksForDate(dateStr, time, text){
-  personalTasks.push({
+async function addToMyTasksForDate(dateStr, time, text, linkedTeamTaskId, repeatDaily){
+  const newTask = {
     id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
     area: 'nina',
     text: text,
     dueDate: dateStr,
     time: time || '',
     ts: Date.now(),
-    resolved: false
-  });
+    resolved: false,
+    repeatDaily: !!repeatDaily,
+    linkedTeamTaskId: linkedTeamTaskId || null
+  };
+  personalTasks.push(newTask);
   if(dateStr === dateKey(currentDate)){
     renderPersonalTasks();
   }
   await savePersonalTasks();
+  return newTask.id;
 }
 
 async function uploadToCloudinary(file){
@@ -1532,13 +1552,7 @@ function renderPersonalTasks(){
   }
   el.innerHTML = pending.map(personalTaskHtml).join('') + resolved.map(personalTaskHtml).join('');
   el.querySelectorAll('.ptask-check').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const t = personalTasks.find(x=>x.id===btn.dataset.id);
-      if(!t) return;
-      toggleTaskDoneForDate(t, todayKey());
-      renderPersonalTasks();
-      await savePersonalTasks();
-    });
+    btn.addEventListener('click', ()=>togglePersonalTaskResolved(btn.dataset.id));
   });
   el.querySelectorAll('.ptask-postpone').forEach(btn=>{
     btn.addEventListener('click', ()=>postponePersonalTask(btn.dataset.id));
@@ -1643,6 +1657,33 @@ function closeEditPersonalTask(){
   document.getElementById('edit-ptask-modal').classList.remove('open');
 }
 
+async function togglePersonalTaskResolved(id){
+  const t = personalTasks.find(x=>x.id===id);
+  if(!t) return;
+  const today = todayKey();
+  toggleTaskDoneForDate(t, today);
+  renderPersonalTasks();
+  await savePersonalTasks();
+  if(t.linkedTeamTaskId){
+    const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
+    if(tt && isTaskDoneForDate(tt, today) !== isTaskDoneForDate(t, today)){
+      toggleTaskDoneForDate(tt, today);
+      renderLists();
+      renderChecklist();
+      await saveTeamTasks();
+    }
+  }
+}
+
+async function postponePersonalTask(id){
+  const t = personalTasks.find(x=>x.id===id);
+  if(!t || t.repeatDaily) return;
+  t.dueDate = nextDayKey(t.dueDate || dateKey(currentDate));
+  renderPersonalTasks();
+  await savePersonalTasks();
+  setStatus('pospuesta a mañana');
+}
+
 async function saveEditPersonalTask(){
   const t = personalTasks.find(x=>x.id===editingPersonalTaskId);
   if(!t) return;
@@ -1656,15 +1697,6 @@ async function saveEditPersonalTask(){
   closeEditPersonalTask();
   renderPersonalTasks();
   await savePersonalTasks();
-}
-
-async function postponePersonalTask(id){
-  const t = personalTasks.find(x=>x.id===id);
-  if(!t || t.repeatDaily) return;
-  t.dueDate = nextDayKey(t.dueDate || dateKey(currentDate));
-  renderPersonalTasks();
-  await savePersonalTasks();
-  setStatus('pospuesta a mañana');
 }
 
 document.getElementById('edit-ptask-cancel').addEventListener('click', closeEditPersonalTask);
@@ -1689,6 +1721,7 @@ function renderDaySummary(){
 
   let html = withTime.map(t => `
     <div class="summary-row">
+      <div class="summary-check" data-id="${t.id}"></div>
       <span class="summary-time">${t.time}</span>
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
     </div>
@@ -1698,11 +1731,19 @@ function renderDaySummary(){
     html += `<div class="summary-subtitle">Sin horario fijo — arrastrá para reordenar</div>`;
     html += noTime.map(t => `
       <div class="summary-row draggable-row" draggable="true" data-id="${t.id}">
+        <div class="summary-check" data-id="${t.id}"></div>
         <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
       </div>
     `).join('');
   }
   el.innerHTML = html;
+
+  el.querySelectorAll('.summary-check').forEach(chk=>{
+    chk.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      togglePersonalTaskResolved(chk.dataset.id);
+    });
+  });
 
   el.querySelectorAll('.draggable-row').forEach(row=>{
     row.addEventListener('dragstart', ()=>{
