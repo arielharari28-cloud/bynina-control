@@ -645,7 +645,7 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="admin-wrap">
   <header>
     <h1>By Nina</h1>
     <div class="datestamp" id="today"></div>
@@ -712,6 +712,9 @@
 
   <div class="filters" id="filters"></div>
 
+  <div class="section-title st-purple" id="share-links-toggle" style="cursor:pointer;">🔗 Links para el equipo — tocá para ver</div>
+  <div id="share-links-panel" style="display:none;"></div>
+
   <div class="section-title st-red">Pendientes</div>
   <div id="pending-list"></div>
 
@@ -762,6 +765,19 @@
   </div>
 
   <div class="status-bar" id="status-bar">cargando...</div>
+</div>
+
+<div class="wrap" id="employee-wrap" style="display:none;">
+  <header>
+    <h1 id="employee-name-title">Hola</h1>
+    <div class="datestamp" id="employee-today"></div>
+  </header>
+  <div id="employee-checklist"></div>
+  <div class="section-title st-red">Pendientes</div>
+  <div id="employee-pending-list"></div>
+  <div class="section-title st-green">Resueltos</div>
+  <div id="employee-resolved-list"></div>
+  <div class="status-bar" id="employee-status-bar">cargando...</div>
 </div>
 
 <div class="modal-overlay" id="edit-task-modal">
@@ -859,6 +875,14 @@ const PEOPLE = {
   stef:'Stef', meli:'Meli', nahuel:'Nahuel', peque:'Peque'
 };
 let activeFilter = 'todos';
+
+// ===== Vista de empleado (link propio por persona) =====
+function getPersonaParam(){
+  const params = new URLSearchParams(window.location.search);
+  const p = params.get('persona');
+  return (p && PEOPLE[p]) ? p : null;
+}
+const employeePersona = getPersonaParam();
 
 const checklistData = [
   {person:'Emir', items:[
@@ -1024,7 +1048,10 @@ function fmtTime(ts){
 }
 
 function setStatus(text){
-  document.getElementById('status-bar').textContent = text;
+  const el1 = document.getElementById('status-bar');
+  if(el1) el1.textContent = text;
+  const el2 = document.getElementById('employee-status-bar');
+  if(el2) el2.textContent = text;
 }
 
 function renderFilters(){
@@ -1092,8 +1119,12 @@ async function toggleTeamTaskResolved(id){
   if(!t) return;
   const today = todayKey();
   toggleTaskDoneForDate(t, today);
-  renderLists();
-  renderChecklist();
+  if(employeePersona){
+    renderEmployeeView();
+  } else {
+    renderLists();
+    renderChecklist();
+  }
   await saveTeamTasks();
   if(t.linkedPersonalTaskId){
     const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
@@ -1109,8 +1140,12 @@ async function postponeTeamTask(id){
   const t = teamTasks.find(x=>x.id===id);
   if(!t || t.repeatDaily) return;
   t.dueDate = nextDayKey(t.dueDate || todayKey());
-  renderLists();
-  renderChecklist();
+  if(employeePersona){
+    renderEmployeeView();
+  } else {
+    renderLists();
+    renderChecklist();
+  }
   await saveTeamTasks();
   setStatus('pospuesta a mañana');
 }
@@ -1281,6 +1316,128 @@ function teamTaskRowHtml(t){
   `;
 }
 
+/* ===== Vista de empleado: solo sus tareas, sin editar/eliminar ===== */
+function employeeTicketHtml(t){
+  const done = isTaskDoneForDate(t, todayKey());
+  const overdue = !t.repeatDaily && isOverdue(t.dueDate, done);
+  const dueLabel = t.repeatDaily ? `<span class="due-badge repeat-badge">🔁 diario</span>` :
+    (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
+  const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
+  const postponeBtn = t.repeatDaily ? '' : `<button class="edit-btn employee-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
+  return `
+    <div class="ticket ${done?'resolved':''}">
+      <div class="ticket-check employee-check" data-id="${t.id}">${done?'✓':''}</div>
+      <div class="ticket-body">
+        <div class="ticket-meta">
+          ${timeLabel}
+          ${dueLabel}
+        </div>
+        <div class="ticket-text">${escapeHtml(t.text)}</div>
+      </div>
+      ${postponeBtn}
+    </div>
+  `;
+}
+
+function renderEmployeeChecklistSection(){
+  const sec = checklistData.find(s => s.person === PEOPLE[employeePersona]);
+  if(!sec) return '';
+  const total = sec.items.length;
+  const done = sec.items.filter(it => checklistState[it.id]).length;
+  const progressClass = done === 0 ? 'zero' : '';
+  return `
+    <div class="check-card">
+      <div class="check-card-header">
+        <div class="check-card-name">Checklist de hoy</div>
+        <div class="check-progress ${progressClass}">${done}/${total}</div>
+      </div>
+      ${sec.items.map(it => `
+        <div class="check-item ${checklistState[it.id] ? 'done' : ''}">
+          <input type="checkbox" id="echk-${it.id}" ${checklistState[it.id] ? 'checked' : ''}>
+          <label for="echk-${it.id}">${it.label}</label>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderEmployeeView(){
+  document.getElementById('employee-name-title').textContent = `Hola, ${PEOPLE[employeePersona]}`;
+  document.getElementById('employee-today').textContent = document.getElementById('today').textContent;
+
+  const checklistEl = document.getElementById('employee-checklist');
+  checklistEl.innerHTML = renderEmployeeChecklistSection();
+  checklistEl.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+    cb.addEventListener('change', async ()=>{
+      const id = cb.id.replace('echk-','');
+      await saveChecklistItem(id, cb.checked);
+      renderEmployeeView();
+    });
+  });
+
+  const mine = teamTasks.filter(t=>t.person===employeePersona);
+  const todayStr = todayKey();
+  const pending = mine.filter(t=>!isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
+    if(a.dueDate && b.dueDate){
+      const cmp = a.dueDate.localeCompare(b.dueDate);
+      if(cmp !== 0) return cmp;
+      return (a.time||'').localeCompare(b.time||'');
+    }
+    if(a.dueDate) return -1;
+    if(b.dueDate) return 1;
+    return b.ts - a.ts;
+  });
+  const resolved = mine.filter(t=>isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
+
+  const pendingEl = document.getElementById('employee-pending-list');
+  const resolvedEl = document.getElementById('employee-resolved-list');
+  pendingEl.innerHTML = pending.length ? pending.map(employeeTicketHtml).join('') :
+    '<div class="empty">No tenés pendientes. 🎉</div>';
+  resolvedEl.innerHTML = resolved.length ? resolved.map(employeeTicketHtml).join('') :
+    '<div class="empty">Todavía nada resuelto hoy.</div>';
+
+  document.querySelectorAll('#employee-pending-list .employee-check, #employee-resolved-list .employee-check').forEach(btn=>{
+    btn.addEventListener('click', ()=>toggleTeamTaskResolved(btn.dataset.id));
+  });
+  document.querySelectorAll('#employee-pending-list .employee-postpone, #employee-resolved-list .employee-postpone').forEach(btn=>{
+    btn.addEventListener('click', ()=>postponeTeamTask(btn.dataset.id));
+  });
+}
+
+/* ===== Panel para copiar el link de cada empleado ===== */
+function renderShareLinks(){
+  const el = document.getElementById('share-links-panel');
+  const base = location.origin + location.pathname;
+  el.innerHTML = Object.keys(PEOPLE).filter(k=>k!=='general').map(k=>{
+    const url = `${base}?persona=${k}`;
+    return `
+      <div class="ticket">
+        <div class="ticket-body">
+          <div class="ticket-text"><strong>${PEOPLE[k]}</strong><br><span style="font-size:12px;color:var(--ink-soft);word-break:break-all;">${url}</span></div>
+        </div>
+        <button class="edit-btn copy-link-btn" data-url="${url}" title="Copiar link">📋</button>
+      </div>
+    `;
+  }).join('');
+  el.querySelectorAll('.copy-link-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      try{
+        await navigator.clipboard.writeText(btn.dataset.url);
+        setStatus('link copiado');
+      }catch(e){
+        window.prompt('Copiá este link:', btn.dataset.url);
+      }
+    });
+  });
+}
+
+document.getElementById('share-links-toggle').addEventListener('click', ()=>{
+  const panel = document.getElementById('share-links-panel');
+  const isHidden = panel.style.display === 'none';
+  panel.style.display = isHidden ? '' : 'none';
+  if(isHidden) renderShareLinks();
+});
+
 async function addTeamTask(){
   const textEl = document.getElementById('team-task-text');
   const personEl = document.getElementById('team-person');
@@ -1391,6 +1548,12 @@ document.getElementById('edit-task-modal').addEventListener('click', (e)=>{
   renderLists();
   renderChecklist();
   setStatus('listo — se guarda solo en este dispositivo');
+  if(employeePersona){
+    document.getElementById('admin-wrap').style.display = 'none';
+    document.getElementById('employee-wrap').style.display = '';
+    renderEmployeeView();
+    setStatus('listo');
+  }
 })();
 
 /* ===== Mi Día (personal, tab 2) ===== */
