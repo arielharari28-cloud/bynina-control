@@ -189,6 +189,22 @@
     height:16px;
     cursor:pointer;
   }
+  .check-row{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    color:var(--ink-soft);
+    margin-top:10px;
+    cursor:pointer;
+    user-select:none;
+  }
+  .check-row input[type=checkbox]{
+    width:16px;
+    height:16px;
+    cursor:pointer;
+  }
 
   /* Filters */
   .filters{
@@ -280,7 +296,7 @@
   .tag.emir{background:var(--purple-soft);color:var(--purple);}
   .tag.flor,.tag.carol,.tag.noemi{background:var(--green-soft);color:var(--green);}
   .tag.noelia,.tag.stef,.tag.meli{background:var(--rust-soft);color:var(--rust);}
-  .tag.general,.tag.aripchico,.tag.ale,.tag.nahuel{background:#eceada;color:var(--ink-soft);}
+  .tag.general,.tag.aripchico,.tag.ale,.tag.nahuel,.tag.peque{background:#eceada;color:var(--ink-soft);}
   .ticket-time{
     font-family:'Inter',sans-serif;
     font-size:11px;
@@ -303,6 +319,10 @@
   .time-badge{
     background:var(--purple-soft);
     color:var(--purple);
+  }
+  .repeat-badge{
+    background:var(--rust-soft);
+    color:var(--rust);
   }
   .ticket-text{
     font-size:14px;
@@ -662,6 +682,7 @@
         <option value="stef">Stef</option>
         <option value="meli">Meli</option>
         <option value="nahuel">Nahuel</option>
+        <option value="peque">Peque</option>
       </select>
       <input type="date" id="team-due-date">
       <input type="time" id="team-time-input">
@@ -671,6 +692,10 @@
     <label class="team-involve-check">
       <input type="checkbox" id="team-involve-me">
       Estoy involucrado — agregar también a mi día
+    </label>
+    <label class="check-row">
+      <input type="checkbox" id="team-repeat-daily">
+      🔁 Se repite todos los días
     </label>
   </div>
 
@@ -716,6 +741,10 @@
         <textarea id="task-text-input" placeholder="Qué tenés que hacer..."></textarea>
         <button id="task-add-btn">Agregar</button>
       </div>
+      <label class="check-row">
+        <input type="checkbox" id="task-repeat-daily">
+        🔁 Se repite todos los días
+      </label>
     </div>
     <div class="filters" id="task-filters"></div>
     <div id="task-list"></div>
@@ -743,6 +772,10 @@
       <label for="edit-task-text">Tarea</label>
       <textarea id="edit-task-text"></textarea>
     </div>
+    <label class="check-row">
+      <input type="checkbox" id="edit-task-repeat">
+      🔁 Se repite todos los días
+    </label>
     <div class="modal-footer">
       <button class="modal-cancel-btn" id="edit-task-cancel">Cancelar</button>
       <button id="edit-task-save">Guardar</button>
@@ -776,6 +809,10 @@
       <label for="edit-ptask-text">Tarea</label>
       <textarea id="edit-ptask-text"></textarea>
     </div>
+    <label class="check-row">
+      <input type="checkbox" id="edit-ptask-repeat">
+      🔁 Se repite todos los días
+    </label>
     <div class="modal-footer">
       <button class="modal-cancel-btn" id="edit-ptask-cancel">Cancelar</button>
       <button id="edit-ptask-save">Guardar</button>
@@ -808,7 +845,7 @@ async function fbSet(path, value){
 const PEOPLE = {
   general:'General', emir:'Emir', aripchico:'Ari Chico', ale:'Ale',
   noemi:'Noemi', flor:'Flor', carol:'Carol', noelia:'Noelia',
-  stef:'Stef', meli:'Meli', nahuel:'Nahuel'
+  stef:'Stef', meli:'Meli', nahuel:'Nahuel', peque:'Peque'
 };
 let activeFilter = 'todos';
 
@@ -856,6 +893,39 @@ function todayKey(){
   return `${yyyy}-${mm}-${dd}`;
 }
 
+// ===== Helpers para tareas que se repiten todos los días y posponer =====
+function nextDayKey(dateStr){
+  const base = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+  base.setDate(base.getDate() + 1);
+  const yyyy = base.getFullYear();
+  const mm = String(base.getMonth()+1).padStart(2,'0');
+  const dd = String(base.getDate()).padStart(2,'0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// Una tarea diaria no tiene un único "resolved": se marca hecha por día (doneDates).
+// Una tarea normal sigue usando el campo resolved de siempre.
+function isTaskDoneForDate(t, dateStr){
+  if(t.repeatDaily) return !!(t.doneDates && t.doneDates[dateStr]);
+  return !!t.resolved;
+}
+
+function toggleTaskDoneForDate(t, dateStr){
+  if(t.repeatDaily){
+    if(!t.doneDates) t.doneDates = {};
+    if(t.doneDates[dateStr]) delete t.doneDates[dateStr];
+    else t.doneDates[dateStr] = true;
+  } else {
+    t.resolved = !t.resolved;
+  }
+}
+
+// Una tarea diaria "aplica" a cualquier día; una tarea normal solo al día de su dueDate.
+function taskAppliesToDate(t, dateStr){
+  if(t.repeatDaily) return true;
+  return t.dueDate === dateStr;
+}
+
 async function loadChecklist(){
   const key = 'control_bynina/checklist/' + todayKey();
   try{
@@ -882,7 +952,7 @@ function renderChecklist(){
     const done = sec.items.filter(it => checklistState[it.id]).length;
     const progressClass = done === 0 ? 'zero' : '';
     const personKey = Object.keys(PEOPLE).find(k => PEOPLE[k] === sec.person);
-    const pendingTeam = teamTasks.filter(t => !t.resolved && t.person === personKey)
+    const pendingTeam = teamTasks.filter(t => !isTaskDoneForDate(t, todayKey()) && t.person === personKey)
       .sort((a,b)=>b.ts-a.ts);
     const teamBlock = pendingTeam.length ? `
       <div class="check-team-tasks">
@@ -918,7 +988,7 @@ function renderChecklist(){
     btn.addEventListener('click', async ()=>{
       const t = teamTasks.find(x=>x.id===btn.dataset.id);
       if(!t) return;
-      t.resolved = !t.resolved;
+      toggleTaskDoneForDate(t, todayKey());
       renderChecklist();
       renderLists();
       await saveTeamTasks();
@@ -931,6 +1001,9 @@ function renderChecklist(){
       renderLists();
       await saveTeamTasks();
     });
+  });
+  el.querySelectorAll('.team-postpone').forEach(btn=>{
+    btn.addEventListener('click', ()=>postponeTeamTask(btn.dataset.id));
   });
   el.querySelectorAll('.team-edit').forEach(btn=>{
     btn.addEventListener('click', ()=>openEditTeamTask(btn.dataset.id));
@@ -972,8 +1045,9 @@ function renderLists(){
   const resolvedEl = document.getElementById('resolved-list');
 
   const filtered = activeFilter==='todos' ? teamTasks : teamTasks.filter(t=>t.person===activeFilter);
-  const pending = filtered.filter(t=>!t.resolved).sort((a,b)=>b.ts-a.ts);
-  const resolved = filtered.filter(t=>t.resolved).sort((a,b)=>b.ts-a.ts);
+  const todayStr = todayKey();
+  const pending = filtered.filter(t=>!isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
+  const resolved = filtered.filter(t=>isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
 
   pendingEl.innerHTML = pending.length ? pending.map(teamTicketHtml).join('') :
     '<div class="empty">No hay pendientes acá. Buen momento para respirar.</div>';
@@ -989,6 +1063,9 @@ function renderLists(){
   document.querySelectorAll('#pending-list .team-edit, #resolved-list .team-edit').forEach(btn=>{
     btn.addEventListener('click', ()=>openEditTeamTask(btn.dataset.id));
   });
+  document.querySelectorAll('#pending-list .team-postpone, #resolved-list .team-postpone').forEach(btn=>{
+    btn.addEventListener('click', ()=>postponeTeamTask(btn.dataset.id));
+  });
 }
 
 function escapeHtml(str){
@@ -1000,10 +1077,20 @@ function escapeHtml(str){
 async function toggleTeamTaskResolved(id){
   const t = teamTasks.find(x=>x.id===id);
   if(!t) return;
-  t.resolved = !t.resolved;
+  toggleTaskDoneForDate(t, todayKey());
   renderLists();
   renderChecklist();
   await saveTeamTasks();
+}
+
+async function postponeTeamTask(id){
+  const t = teamTasks.find(x=>x.id===id);
+  if(!t || t.repeatDaily) return;
+  t.dueDate = nextDayKey(t.dueDate || todayKey());
+  renderLists();
+  renderChecklist();
+  await saveTeamTasks();
+  setStatus('pospuesta a mañana');
 }
 
 async function deleteTeamTask(id){
@@ -1129,12 +1216,15 @@ function isOverdue(dueStr, resolved){
 }
 
 function teamTicketHtml(t){
-  const overdue = isOverdue(t.dueDate, t.resolved);
-  const dueLabel = t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '';
+  const done = isTaskDoneForDate(t, todayKey());
+  const overdue = !t.repeatDaily && isOverdue(t.dueDate, done);
+  const dueLabel = t.repeatDaily ? `<span class="due-badge repeat-badge">🔁 diario</span>` :
+    (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
+  const postponeBtn = t.repeatDaily ? '' : `<button class="edit-btn team-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   return `
-    <div class="ticket ${t.resolved?'resolved':''}">
-      <div class="ticket-check team-check" data-id="${t.id}">${t.resolved?'✓':''}</div>
+    <div class="ticket ${done?'resolved':''}">
+      <div class="ticket-check team-check" data-id="${t.id}">${done?'✓':''}</div>
       <div class="ticket-body">
         <div class="ticket-meta">
           <span class="tag ${t.person}">${PEOPLE[t.person] || t.person}</span>
@@ -1144,6 +1234,7 @@ function teamTicketHtml(t){
         </div>
         <div class="ticket-text">${escapeHtml(t.text)}</div>
       </div>
+      ${postponeBtn}
       <button class="edit-btn team-edit" data-id="${t.id}" title="Editar">✎</button>
       <button class="del-btn team-del" data-id="${t.id}" title="Eliminar">×</button>
     </div>
@@ -1151,13 +1242,17 @@ function teamTicketHtml(t){
 }
 
 function teamTaskRowHtml(t){
-  const overdue = isOverdue(t.dueDate, t.resolved);
-  const dueLabel = t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '';
+  const done = isTaskDoneForDate(t, todayKey());
+  const overdue = !t.repeatDaily && isOverdue(t.dueDate, done);
+  const dueLabel = t.repeatDaily ? `<span class="due-badge repeat-badge">🔁 diario</span>` :
+    (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
+  const postponeBtn = t.repeatDaily ? '' : `<button class="edit-btn team-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   return `
     <div class="check-item check-team-item">
-      <div class="ticket-check team-check" data-id="${t.id}">${t.resolved?'✓':''}</div>
+      <div class="ticket-check team-check" data-id="${t.id}">${done?'✓':''}</div>
       <label class="check-team-label">${escapeHtml(t.text)} ${timeLabel} ${dueLabel}</label>
+      ${postponeBtn}
       <button class="edit-btn team-edit" data-id="${t.id}" title="Editar">✎</button>
       <button class="del-btn team-del" data-id="${t.id}" title="Eliminar">×</button>
     </div>
@@ -1170,6 +1265,7 @@ async function addTeamTask(){
   const dueEl = document.getElementById('team-due-date');
   const timeEl = document.getElementById('team-time-input');
   const involveEl = document.getElementById('team-involve-me');
+  const repeatEl = document.getElementById('team-repeat-daily');
   const text = textEl.value.trim();
   if(!text) return;
   const btn = document.getElementById('team-add-btn');
@@ -1177,6 +1273,7 @@ async function addTeamTask(){
   const dueDate = dueEl.value || '';
   const time = timeEl.value || '';
   const involveMe = involveEl.checked;
+  const repeatDaily = repeatEl.checked;
   teamTasks.push({
     id: 't' + Date.now() + Math.random().toString(36).slice(2,7),
     person: personEl.value,
@@ -1184,7 +1281,8 @@ async function addTeamTask(){
     dueDate: dueDate,
     time: time,
     ts: Date.now(),
-    resolved: false
+    resolved: false,
+    repeatDaily: repeatDaily
   });
   textEl.value = '';
   timeEl.value = '';
@@ -1196,6 +1294,7 @@ async function addTeamTask(){
     setStatus('guardado y agregado a tu día');
   }
   involveEl.checked = false;
+  repeatEl.checked = false;
   btn.disabled = false;
   textEl.focus();
 }
@@ -1224,6 +1323,7 @@ function openEditTeamTask(id){
   document.getElementById('edit-task-due').value = t.dueDate || '';
   document.getElementById('edit-task-time').value = t.time || '';
   document.getElementById('edit-task-text').value = t.text;
+  document.getElementById('edit-task-repeat').checked = !!t.repeatDaily;
   document.getElementById('edit-task-modal').classList.add('open');
 }
 
@@ -1241,6 +1341,7 @@ async function saveEditTeamTask(){
   t.person = document.getElementById('edit-task-person').value;
   t.dueDate = document.getElementById('edit-task-due').value || '';
   t.time = document.getElementById('edit-task-time').value || '';
+  t.repeatDaily = document.getElementById('edit-task-repeat').checked;
   closeEditTeamTask();
   renderLists();
   renderChecklist();
@@ -1382,12 +1483,15 @@ function renderTaskFilters(){
 }
 
 function personalTaskHtml(t){
-  const overdue = isOverdue(t.dueDate, t.resolved);
-  const dueLabel = t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '';
+  const done = isTaskDoneForDate(t, todayKey());
+  const overdue = !t.repeatDaily && isOverdue(t.dueDate, done);
+  const dueLabel = t.repeatDaily ? `<span class="due-badge repeat-badge">🔁 diario</span>` :
+    (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
+  const postponeBtn = t.repeatDaily ? '' : `<button class="edit-btn ptask-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   return `
-    <div class="ticket ${t.resolved?'resolved':''}">
-      <div class="ticket-check ptask-check" data-id="${t.id}">${t.resolved?'✓':''}</div>
+    <div class="ticket ${done?'resolved':''}">
+      <div class="ticket-check ptask-check" data-id="${t.id}">${done?'✓':''}</div>
       <div class="ticket-body">
         <div class="ticket-meta">
           <span class="tag ${t.area}">${AREAS[t.area] || t.area}</span>
@@ -1398,6 +1502,7 @@ function personalTaskHtml(t){
         ${t.photoUrl ? `<img class="ptask-photo" src="${t.photoUrl}" data-full="${t.photoUrl}">` : ''}
       </div>
       <button class="edit-btn ptask-photo-btn" data-id="${t.id}" title="Agregar/cambiar foto">📷</button>
+      ${postponeBtn}
       <button class="edit-btn ptask-edit" data-id="${t.id}" title="Editar">✎</button>
       <button class="del-btn ptask-del" data-id="${t.id}" title="Eliminar">×</button>
       <input type="file" accept="image/*" class="ptask-photo-input" data-id="${t.id}" style="display:none">
@@ -1408,7 +1513,8 @@ function personalTaskHtml(t){
 function renderPersonalTasks(){
   const el = document.getElementById('task-list');
   const filtered = taskFilter==='todas' ? personalTasks : personalTasks.filter(t=>t.area===taskFilter);
-  const pending = filtered.filter(t=>!t.resolved).sort((a,b)=>{
+  const todayStr = todayKey();
+  const pending = filtered.filter(t=>!isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
     if(a.dueDate && b.dueDate){
       const cmp = a.dueDate.localeCompare(b.dueDate);
       if(cmp !== 0) return cmp;
@@ -1418,7 +1524,7 @@ function renderPersonalTasks(){
     if(b.dueDate) return 1;
     return b.ts - a.ts;
   });
-  const resolved = filtered.filter(t=>t.resolved).sort((a,b)=>b.ts-a.ts);
+  const resolved = filtered.filter(t=>isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
   if(!filtered.length){
     el.innerHTML = '<div class="empty">No hay tareas acá.</div>';
     renderDaySummary();
@@ -1429,10 +1535,13 @@ function renderPersonalTasks(){
     btn.addEventListener('click', async ()=>{
       const t = personalTasks.find(x=>x.id===btn.dataset.id);
       if(!t) return;
-      t.resolved = !t.resolved;
+      toggleTaskDoneForDate(t, todayKey());
       renderPersonalTasks();
       await savePersonalTasks();
     });
+  });
+  el.querySelectorAll('.ptask-postpone').forEach(btn=>{
+    btn.addEventListener('click', ()=>postponePersonalTask(btn.dataset.id));
   });
   el.querySelectorAll('.ptask-edit').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -1483,6 +1592,7 @@ async function addPersonalTask(){
   const areaEl = document.getElementById('task-area');
   const dueEl = document.getElementById('task-due-date');
   const timeEl = document.getElementById('task-time-input');
+  const repeatEl = document.getElementById('task-repeat-daily');
   const text = textEl.value.trim();
   if(!text) return;
   const btn = document.getElementById('task-add-btn');
@@ -1494,10 +1604,12 @@ async function addPersonalTask(){
     dueDate: dueEl.value || '',
     time: timeEl.value || '',
     ts: Date.now(),
-    resolved: false
+    resolved: false,
+    repeatDaily: repeatEl.checked
   });
   textEl.value = '';
   timeEl.value = '';
+  repeatEl.checked = false;
   renderPersonalTasks();
   await savePersonalTasks();
   btn.disabled = false;
@@ -1522,6 +1634,7 @@ function openEditPersonalTask(id){
   document.getElementById('edit-ptask-due').value = t.dueDate || '';
   document.getElementById('edit-ptask-time').value = t.time || '';
   document.getElementById('edit-ptask-text').value = t.text;
+  document.getElementById('edit-ptask-repeat').checked = !!t.repeatDaily;
   document.getElementById('edit-ptask-modal').classList.add('open');
 }
 
@@ -1539,9 +1652,19 @@ async function saveEditPersonalTask(){
   t.area = document.getElementById('edit-ptask-area').value;
   t.dueDate = document.getElementById('edit-ptask-due').value || '';
   t.time = document.getElementById('edit-ptask-time').value || '';
+  t.repeatDaily = document.getElementById('edit-ptask-repeat').checked;
   closeEditPersonalTask();
   renderPersonalTasks();
   await savePersonalTasks();
+}
+
+async function postponePersonalTask(id){
+  const t = personalTasks.find(x=>x.id===id);
+  if(!t || t.repeatDaily) return;
+  t.dueDate = nextDayKey(t.dueDate || dateKey(currentDate));
+  renderPersonalTasks();
+  await savePersonalTasks();
+  setStatus('pospuesta a mañana');
 }
 
 document.getElementById('edit-ptask-cancel').addEventListener('click', closeEditPersonalTask);
@@ -1556,7 +1679,7 @@ function renderDaySummary(){
   const el = document.getElementById('day-summary');
   if(!el) return;
   const todayStr = dateKey(currentDate);
-  const dayTasks = (personalTasks||[]).filter(t => !t.resolved && t.dueDate === todayStr);
+  const dayTasks = (personalTasks||[]).filter(t => taskAppliesToDate(t, todayStr) && !isTaskDoneForDate(t, todayStr));
   if(!dayTasks.length){
     el.innerHTML = '<div class="empty">Sin pendientes para este día.</div>';
     return;
@@ -1604,7 +1727,7 @@ function renderDaySummary(){
 
 async function reorderNoTimeTasks(dateStr, draggedId, targetId){
   const group = personalTasks
-    .filter(t => !t.resolved && t.dueDate === dateStr && !t.time)
+    .filter(t => taskAppliesToDate(t, dateStr) && !isTaskDoneForDate(t, dateStr) && !t.time)
     .sort((a,b)=>(a.order ?? a.ts) - (b.order ?? b.ts));
   const fromIdx = group.findIndex(t=>t.id===draggedId);
   const toIdx = group.findIndex(t=>t.id===targetId);
