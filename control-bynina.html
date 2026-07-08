@@ -148,6 +148,7 @@
   }
   select{flex:0 0 140px;}
   input[type=date]{flex:0 0 145px;}
+  input[type=time]{flex:0 0 110px;}
   textarea{
     flex:1 1 240px;
     min-width:200px;
@@ -171,6 +172,22 @@
 
   .capture.team-capture{
     border-left:4px solid var(--rust);
+  }
+  .team-involve-check{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    color:var(--ink-soft);
+    margin-top:10px;
+    cursor:pointer;
+    user-select:none;
+  }
+  .team-involve-check input[type=checkbox]{
+    width:16px;
+    height:16px;
+    cursor:pointer;
   }
 
   /* Filters */
@@ -282,6 +299,10 @@
     background:var(--red-soft);
     color:var(--red);
     font-weight:700;
+  }
+  .time-badge{
+    background:var(--purple-soft);
+    color:var(--purple);
   }
   .ticket-text{
     font-size:14px;
@@ -686,9 +707,14 @@
         <option value="nahuel">Nahuel</option>
       </select>
       <input type="date" id="team-due-date">
+      <input type="time" id="team-time-input">
       <textarea id="team-task-text" placeholder="Qué necesitás que haga..."></textarea>
       <button id="team-add-btn">Crear</button>
     </div>
+    <label class="team-involve-check">
+      <input type="checkbox" id="team-involve-me">
+      Estoy involucrado — agregar también a mi día
+    </label>
   </div>
 
   <div class="filters" id="filters"></div>
@@ -757,6 +783,10 @@
     <div class="modal-field">
       <label for="edit-task-due">Vence</label>
       <input type="date" id="edit-task-due">
+    </div>
+    <div class="modal-field">
+      <label for="edit-task-time">Horario</label>
+      <input type="time" id="edit-task-time">
     </div>
     <div class="modal-field">
       <label for="edit-task-text">Tarea</label>
@@ -1117,6 +1147,7 @@ function isOverdue(dueStr, resolved){
 function teamTicketHtml(t){
   const overdue = isOverdue(t.dueDate, t.resolved);
   const dueLabel = t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '';
+  const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   return `
     <div class="ticket ${t.resolved?'resolved':''}">
       <div class="ticket-check team-check" data-id="${t.id}">${t.resolved?'✓':''}</div>
@@ -1124,6 +1155,7 @@ function teamTicketHtml(t){
         <div class="ticket-meta">
           <span class="tag ${t.person}">${PEOPLE[t.person] || t.person}</span>
           <span class="ticket-time">${fmtTime(t.ts)}</span>
+          ${timeLabel}
           ${dueLabel}
         </div>
         <div class="ticket-text">${escapeHtml(t.text)}</div>
@@ -1137,10 +1169,11 @@ function teamTicketHtml(t){
 function teamTaskRowHtml(t){
   const overdue = isOverdue(t.dueDate, t.resolved);
   const dueLabel = t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '';
+  const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   return `
     <div class="check-item check-team-item">
       <div class="ticket-check team-check" data-id="${t.id}">${t.resolved?'✓':''}</div>
-      <label class="check-team-label">${escapeHtml(t.text)} ${dueLabel}</label>
+      <label class="check-team-label">${escapeHtml(t.text)} ${timeLabel} ${dueLabel}</label>
       <button class="edit-btn team-edit" data-id="${t.id}" title="Editar">✎</button>
       <button class="del-btn team-del" data-id="${t.id}" title="Eliminar">×</button>
     </div>
@@ -1151,22 +1184,34 @@ async function addTeamTask(){
   const textEl = document.getElementById('team-task-text');
   const personEl = document.getElementById('team-person');
   const dueEl = document.getElementById('team-due-date');
+  const timeEl = document.getElementById('team-time-input');
+  const involveEl = document.getElementById('team-involve-me');
   const text = textEl.value.trim();
   if(!text) return;
   const btn = document.getElementById('team-add-btn');
   btn.disabled = true;
+  const dueDate = dueEl.value || '';
+  const time = timeEl.value || '';
+  const involveMe = involveEl.checked;
   teamTasks.push({
     id: 't' + Date.now() + Math.random().toString(36).slice(2,7),
     person: personEl.value,
     text: text,
-    dueDate: dueEl.value || '',
+    dueDate: dueDate,
+    time: time,
     ts: Date.now(),
     resolved: false
   });
   textEl.value = '';
+  timeEl.value = '';
   renderLists();
   renderChecklist();
   await saveTeamTasks();
+  if(involveMe){
+    await addToAgendaForDate(dueDate || todayKey(), time, text);
+    setStatus('guardado y agregado a tu día');
+  }
+  involveEl.checked = false;
   btn.disabled = false;
   textEl.focus();
 }
@@ -1193,6 +1238,7 @@ function openEditTeamTask(id){
   populateEditPersonSelect();
   document.getElementById('edit-task-person').value = t.person;
   document.getElementById('edit-task-due').value = t.dueDate || '';
+  document.getElementById('edit-task-time').value = t.time || '';
   document.getElementById('edit-task-text').value = t.text;
   document.getElementById('edit-task-modal').classList.add('open');
 }
@@ -1210,6 +1256,7 @@ async function saveEditTeamTask(){
   t.text = newText;
   t.person = document.getElementById('edit-task-person').value;
   t.dueDate = document.getElementById('edit-task-due').value || '';
+  t.time = document.getElementById('edit-task-time').value || '';
   closeEditTeamTask();
   renderLists();
   renderChecklist();
@@ -1299,6 +1346,30 @@ async function saveAgenda(){
   try{
     await fbSet(key, JSON.stringify(agendaItems));
   }catch(e){}
+}
+
+async function addToAgendaForDate(dateStr, time, text){
+  const newItem = {
+    id: 'a' + Date.now() + Math.random().toString(36).slice(2,7),
+    time: time || '00:00',
+    text: text,
+    done: false
+  };
+  if(dateStr === dateKey(currentDate)){
+    agendaItems.push(newItem);
+    renderAgenda();
+    await saveAgenda();
+    return;
+  }
+  const key = 'control_bynina/agenda/' + dateStr;
+  try{
+    const val = await fbGet(key);
+    const items = val ? JSON.parse(val) : defaultAgendaFor(new Date(dateStr + 'T00:00:00'));
+    items.push(newItem);
+    await fbSet(key, JSON.stringify(items));
+  }catch(e){
+    try{ await fbSet(key, JSON.stringify([newItem])); }catch(e2){}
+  }
 }
 
 async function uploadToCloudinary(file){
