@@ -607,6 +607,7 @@
     gap:10px;
     padding:7px 0;
     border-bottom:1px solid var(--line);
+    flex-wrap:wrap;
   }
   .summary-check{
     flex:0 0 auto;
@@ -631,7 +632,7 @@
     color:var(--purple);
     flex:0 0 46px;
   }
-  .summary-text{font-size:14px;}
+  .summary-text{font-size:14px; flex:1 1 auto; min-width:0;}
   .summary-subtitle{
     font-family:'Poppins',sans-serif;
     font-size:12px;
@@ -975,9 +976,12 @@ function toggleTaskDoneForDate(t, dateStr){
 }
 
 // Una tarea diaria "aplica" a cualquier día; una tarea normal solo al día de su dueDate.
+// Si estamos parados en el día de hoy, también arrastramos las que quedaron atrasadas de días anteriores.
 function taskAppliesToDate(t, dateStr){
   if(t.repeatDaily) return true;
-  return t.dueDate === dateStr;
+  if(t.dueDate === dateStr) return true;
+  if(dateStr === todayKey() && t.dueDate && t.dueDate < dateStr && !t.resolved) return true;
+  return false;
 }
 
 async function loadChecklist(){
@@ -1966,14 +1970,28 @@ function renderDaySummary(){
     el.innerHTML = '<div class="empty">Sin pendientes para este día.</div>';
     return;
   }
-  const withTime = dayTasks.filter(t=>t.time).sort((a,b)=>a.time.localeCompare(b.time));
-  const noTime = dayTasks.filter(t=>!t.time).sort((a,b)=>(a.order ?? a.ts) - (b.order ?? b.ts));
+  const withTime = dayTasks.filter(t=>t.time).sort((a,b)=>{
+    const cmp = (a.dueDate||'').localeCompare(b.dueDate||'');
+    if(cmp !== 0) return cmp;
+    return a.time.localeCompare(b.time);
+  });
+  const noTime = dayTasks.filter(t=>!t.time).sort((a,b)=>{
+    const cmp = (a.dueDate||'').localeCompare(b.dueDate||'');
+    if(cmp !== 0) return cmp;
+    return (a.order ?? a.ts) - (b.order ?? b.ts);
+  });
+
+  const overdueLabel = (t) => (t.dueDate && t.dueDate !== todayStr) ?
+    `<span class="due-badge overdue">atrasada · venció ${fmtDue(t.dueDate)}</span>` : '';
+  const pendingLabel = (t) => (t.dueDate && t.dueDate !== todayStr) ?
+    `<span class="due-badge">pendiente</span>` : '';
 
   let html = withTime.map(t => `
     <div class="summary-row">
       <div class="summary-check" data-id="${t.id}"></div>
       <span class="summary-time">${t.time}</span>
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
+      ${overdueLabel(t)}
     </div>
   `).join('');
 
@@ -1983,6 +2001,7 @@ function renderDaySummary(){
       <div class="summary-row draggable-row" draggable="true" data-id="${t.id}">
         <div class="summary-check" data-id="${t.id}"></div>
         <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
+        ${pendingLabel(t)}
       </div>
     `).join('');
   }
