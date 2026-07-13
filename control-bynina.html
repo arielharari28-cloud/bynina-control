@@ -417,6 +417,80 @@
     border:1px solid var(--line);
   }
 
+  /* Calendario de contenido */
+  .cal-nav{
+    display:flex;align-items:center;justify-content:space-between;
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:10px 14px;margin-bottom:14px;
+  }
+  .cal-nav button{
+    background:var(--purple);color:#fff;border:none;border-radius:50%;
+    width:32px;height:32px;font-size:16px;font-family:'Poppins',sans-serif;padding:0;
+  }
+  .cal-nav .cal-month-label{
+    font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;text-align:center;flex:1;
+  }
+  .cal-legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+  .cal-legend-item{
+    display:flex;align-items:center;gap:5px;font-family:'Inter',sans-serif;
+    font-size:11px;color:var(--ink-soft);
+  }
+  .cal-legend-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;}
+  .cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px;}
+  .cal-dow{
+    text-align:center;font-family:'Poppins',sans-serif;font-size:11px;font-weight:600;
+    color:var(--ink-soft);
+  }
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:20px;}
+  .cal-day{
+    background:var(--card);border:1px solid var(--line);border-radius:8px;
+    padding:4px;min-height:58px;cursor:pointer;overflow:hidden;
+  }
+  .cal-day.other-month{opacity:.35;}
+  .cal-day.today{border:2px solid var(--purple);}
+  .cal-day-num{font-family:'Poppins',sans-serif;font-size:11px;font-weight:600;color:var(--ink);}
+  .cal-item-chip{
+    font-family:'Inter',sans-serif;font-size:9px;color:var(--ink);
+    display:flex;align-items:center;gap:3px;margin-top:2px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .cal-item-dot{width:6px;height:6px;border-radius:50%;flex:0 0 auto;}
+  .cal-more{font-family:'Inter',sans-serif;font-size:9px;color:var(--ink-soft);margin-top:2px;}
+  .cal-day-item-row{
+    display:flex;align-items:center;gap:8px;border:1px solid var(--line);
+    border-radius:8px;padding:8px;margin-bottom:8px;
+  }
+  .cal-day-item-row .cal-item-dot{width:9px;height:9px;}
+  .cal-day-item-main{flex:1;}
+  .cal-day-item-title{font-family:'Inter',sans-serif;font-size:13px;color:var(--ink);}
+  .cal-day-item-meta{display:flex;gap:6px;margin-top:4px;}
+  .cal-day-item-meta select{
+    font-size:11px;padding:4px 6px;flex:0 0 auto;
+  }
+  .cal-day-item-del{
+    background:none;color:var(--red);border:1px solid var(--red-soft);
+    border-radius:50%;width:26px;height:26px;font-size:13px;padding:0;flex:0 0 auto;
+  }
+  .cal-item-chip.cal-task-chip{font-weight:600;}
+  .cal-item-chip.cal-task-chip.done{opacity:.45;text-decoration:line-through;}
+  .cal-day-team-tasks-label{
+    font-family:'Poppins',sans-serif;font-size:12px;font-weight:600;
+    color:var(--ink-soft);margin-bottom:8px;
+  }
+  .cal-day-team-row{background:#f7f6f2;}
+  .cal-day-item-title.done{opacity:.5;text-decoration:line-through;}
+  .cal-day-team-tasks-hint{
+    font-family:'Inter',sans-serif;font-size:11px;color:var(--ink-soft);
+    margin-bottom:14px;
+  }
+
+  .cal-add-form{
+    border-top:1px solid var(--line);padding-top:12px;margin-top:4px;
+  }
+  .cal-add-form-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+  .cal-add-form-row select{flex:1 1 100px;}
+  .cal-add-form-row textarea{flex:1 1 100%;min-height:44px;}
+
   .empty{
     font-family:'Inter',sans-serif;
     font-size:13px;
@@ -651,6 +725,22 @@
     color:#fff;
     border-color:var(--ink);
   }
+  .emp-tab-btn{
+    font-family:'Poppins',sans-serif;
+    font-weight:600;
+    font-size:14px;
+    padding:10px 20px;
+    border-radius:20px;
+    background:var(--card);
+    border:1px solid var(--line);
+    color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .emp-tab-btn.active{
+    background:var(--ink);
+    color:#fff;
+    border-color:var(--ink);
+  }
   .tab-panel{display:none;}
   .tab-panel.active{display:block;}
 
@@ -758,6 +848,7 @@
   <div class="tab-nav">
     <div class="tab-btn active" data-tab="control">Control equipo</div>
     <div class="tab-btn" data-tab="mi-dia">Mi Día</div>
+    <div class="tab-btn" data-tab="calendario">Calendario</div>
   </div>
 
   <div id="tab-control" class="tab-panel active">
@@ -784,21 +875,9 @@
   <div class="section-title st-rust">Tareas rápidas para el equipo</div>
   <div class="capture team-capture">
     <div class="capture-label">Crear tarea puntual (les aparece a ellos)</div>
+    <div class="capture-label" style="margin-top:0;">Para quién (elegí uno o varios)</div>
+    <div class="filters" id="team-person-chips"></div>
     <div class="capture-row">
-      <select id="team-person">
-        <option value="general">General</option>
-        <option value="emir">Emir</option>
-        <option value="aripchico">Ari Chico</option>
-        <option value="ale">Ale</option>
-        <option value="noemi">Noemi</option>
-        <option value="flor">Flor</option>
-        <option value="carol">Carol</option>
-        <option value="noelia">Noelia</option>
-        <option value="stef">Stef</option>
-        <option value="meli">Meli</option>
-        <option value="nahuel">Nahuel</option>
-        <option value="peque">Peque</option>
-      </select>
       <input type="date" id="team-due-date">
       <input type="time" id="team-time-input">
       <textarea id="team-task-text" placeholder="Qué necesitás que haga..."></textarea>
@@ -875,14 +954,35 @@
     <div id="task-list"></div>
   </div>
 
+  <div id="tab-calendario" class="tab-panel">
+    <div class="cal-nav">
+      <button id="cal-prev-month">‹</button>
+      <div class="cal-month-label" id="cal-month-label"></div>
+      <button id="cal-next-month">›</button>
+    </div>
+    <div class="capture-label" style="margin-top:0;">Filtrar tareas por persona</div>
+    <div class="filters" id="cal-person-filter"></div>
+    <div class="cal-legend" id="cal-legend"></div>
+    <div class="cal-dow-row" id="cal-dow-row"></div>
+    <div class="cal-grid" id="cal-grid"></div>
+  </div>
+
   <div class="status-bar" id="status-bar">cargando...</div>
 </div>
 
 <div class="wrap" id="employee-wrap" style="display:none;">
+
   <header>
     <h1 id="employee-name-title">Hola</h1>
     <div class="datestamp" id="employee-today"></div>
   </header>
+
+  <div class="tab-nav" id="employee-tab-nav" style="display:none;">
+    <div class="emp-tab-btn active" data-emp-tab="tareas">Mis tareas</div>
+    <div class="emp-tab-btn" data-emp-tab="calendario">Calendario</div>
+  </div>
+
+  <div id="emp-tab-tareas" class="tab-panel active">
   <div id="employee-checklist"></div>
 
   <div class="section-title st-rust">Agregar tarea</div>
@@ -907,6 +1007,19 @@
   <div id="employee-pending-list"></div>
   <div class="section-title st-green">Resueltos</div>
   <div id="employee-resolved-list"></div>
+  </div>
+
+  <div id="emp-tab-calendario" class="tab-panel">
+    <div class="cal-nav">
+      <button id="ecal-prev-month">‹</button>
+      <div class="cal-month-label" id="ecal-month-label"></div>
+      <button id="ecal-next-month">›</button>
+    </div>
+    <div class="cal-legend" id="ecal-legend"></div>
+    <div class="cal-dow-row" id="ecal-dow-row"></div>
+    <div class="cal-grid" id="ecal-grid"></div>
+  </div>
+
   <div class="status-bar" id="employee-status-bar">cargando...</div>
 </div>
 
@@ -977,6 +1090,30 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="cal-day-modal">
+  <div class="modal-box">
+    <div class="modal-title" id="cal-day-modal-title">Contenido del día</div>
+    <div id="cal-day-team-tasks"></div>
+    <div id="cal-day-items"></div>
+    <div class="cal-add-form">
+      <div class="modal-field" style="margin-bottom:0;">
+        <label>Nuevo contenido</label>
+        <textarea id="cal-new-title" placeholder="Título / tema..."></textarea>
+      </div>
+      <div class="cal-add-form-row">
+        <select id="cal-new-type"></select>
+        <select id="cal-new-status"></select>
+      </div>
+      <div class="cal-add-form-row">
+        <button id="cal-add-item-btn">Agregar contenido</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-cancel-btn" id="cal-day-modal-close">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 firebase.initializeApp({
   apiKey:"AIzaSyBqZ9ZkYfcDfXVEIGVsZM5_cByJkBXhVeA",
@@ -1004,6 +1141,13 @@ const PEOPLE = {
   noemi:'Noemi', flor:'Flor', carol:'Carol', noelia:'Noelia',
   stef:'Stef', meli:'Meli', nahuel:'Nahuel', peque:'Peque'
 };
+// Subconjunto para listas de selección (crear tarea, filtros, share links).
+// Se excluyen del listado por pedido de Ariel, pero quedan en PEOPLE para que
+// links/datos viejos de estas personas sigan mostrando su nombre sin romperse.
+const INACTIVE_PEOPLE_KEYS = ['ale','nahuel','carol','flor','noemi'];
+const ACTIVE_PEOPLE = Object.fromEntries(
+  Object.entries(PEOPLE).filter(([k]) => !INACTIVE_PEOPLE_KEYS.includes(k))
+);
 let activeFilter = 'todos';
 
 // ===== Vista de empleado (link propio por persona) =====
@@ -1320,7 +1464,7 @@ function setStatus(text){
 
 function renderFilters(){
   const el = document.getElementById('filters');
-  const keys = ['todos', ...Object.keys(PEOPLE)];
+  const keys = ['todos', ...Object.keys(ACTIVE_PEOPLE)];
   el.innerHTML = keys.map(k => {
     const label = k === 'todos' ? 'Todos' : PEOPLE[k];
     return `<div class="chip ${activeFilter===k?'active':''}" data-key="${k}">${label}</div>`;
@@ -1378,6 +1522,13 @@ function escapeHtml(str){
   return div.innerHTML;
 }
 
+function refreshCalendars(){
+  if(typeof renderCalendarMonth === 'function'){
+    renderCalendarMonth('admin');
+    renderCalendarMonth('emp');
+  }
+}
+
 async function toggleTeamTaskResolved(id){
   const t = teamTasks.find(x=>x.id===id);
   if(!t) return;
@@ -1389,6 +1540,7 @@ async function toggleTeamTaskResolved(id){
     renderLists();
     renderChecklist();
   }
+  refreshCalendars();
   await saveTeamTasks();
   if(t.linkedPersonalTaskId){
     const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
@@ -1410,6 +1562,7 @@ async function postponeTeamTask(id){
     renderLists();
     renderChecklist();
   }
+  refreshCalendars();
   await saveTeamTasks();
   setStatus('pospuesta a mañana');
 }
@@ -1418,6 +1571,7 @@ async function deleteTeamTask(id){
   teamTasks = teamTasks.filter(x=>x.id!==id);
   renderLists();
   renderChecklist();
+  refreshCalendars();
   await saveTeamTasks();
 }
 
@@ -1713,7 +1867,7 @@ function renderEmployeeView(){
 function renderShareLinks(){
   const el = document.getElementById('share-links-panel');
   const base = location.origin + location.pathname;
-  el.innerHTML = Object.keys(PEOPLE).filter(k=>k!=='general').map(k=>{
+  el.innerHTML = Object.keys(ACTIVE_PEOPLE).filter(k=>k!=='general').map(k=>{
     const url = `${base}?persona=${k}`;
     return `
       <div class="ticket">
@@ -1743,40 +1897,54 @@ document.getElementById('share-links-toggle').addEventListener('click', ()=>{
   if(isHidden) renderShareLinks();
 });
 
+function renderTeamPersonChips(){
+  const el = document.getElementById('team-person-chips');
+  if(!el) return;
+  el.innerHTML = Object.entries(ACTIVE_PEOPLE).map(([k,v])=>
+    `<div class="chip team-person-chip" data-person="${k}">${v}</div>`
+  ).join('');
+  el.querySelectorAll('.team-person-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{ chip.classList.toggle('active'); });
+  });
+}
+
 async function addTeamTask(){
   const textEl = document.getElementById('team-task-text');
-  const personEl = document.getElementById('team-person');
   const dueEl = document.getElementById('team-due-date');
   const timeEl = document.getElementById('team-time-input');
   const involveEl = document.getElementById('team-involve-me');
   const repeatEl = document.getElementById('team-repeat-daily');
   const text = textEl.value.trim();
   if(!text) return;
+  let selectedPeople = Array.from(document.querySelectorAll('.team-person-chip.active')).map(c=>c.dataset.person);
+  if(!selectedPeople.length) selectedPeople = ['general'];
   const btn = document.getElementById('team-add-btn');
   btn.disabled = true;
   const dueDate = dueEl.value || '';
   const time = timeEl.value || '';
   const involveMe = involveEl.checked;
   const repeatDaily = repeatEl.checked;
-  const newTeamTask = {
+  const newTasks = selectedPeople.map(person => ({
     id: 't' + Date.now() + Math.random().toString(36).slice(2,7),
-    person: personEl.value,
+    person: person,
     text: text,
     dueDate: dueDate,
     time: time,
     ts: Date.now(),
     resolved: false,
     repeatDaily: repeatDaily
-  };
-  teamTasks.push(newTeamTask);
+  }));
+  newTasks.forEach(t => teamTasks.push(t));
   textEl.value = '';
   timeEl.value = '';
+  document.querySelectorAll('.team-person-chip.active').forEach(c=>c.classList.remove('active'));
   renderLists();
   renderChecklist();
+  refreshCalendars();
   await saveTeamTasks();
   if(involveMe){
-    const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTeamTask.id, repeatDaily);
-    newTeamTask.linkedPersonalTaskId = linkedId;
+    const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTasks[0].id, repeatDaily);
+    newTasks[0].linkedPersonalTaskId = linkedId;
     await saveTeamTasks();
     setStatus('guardado y agregado a tu día');
   }
@@ -1823,6 +1991,7 @@ async function addEmployeeTask(){
   textEl.value = '';
   timeEl.value = '';
   renderEmployeeView();
+  refreshCalendars();
   await saveTeamTasks();
   if(involveBoss){
     const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTeamTask.id, repeatDaily);
@@ -1847,7 +2016,7 @@ let editingTeamTaskId = null;
 
 function populateEditPersonSelect(){
   const sel = document.getElementById('edit-task-person');
-  sel.innerHTML = Object.keys(PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('');
+  sel.innerHTML = Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('');
 }
 
 function openEditTeamTask(id){
@@ -1886,6 +2055,7 @@ async function saveEditTeamTask(){
     renderLists();
     renderChecklist();
   }
+  refreshCalendars();
   await saveTeamTasks();
 }
 
@@ -1898,6 +2068,7 @@ document.getElementById('edit-task-modal').addEventListener('click', (e)=>{
 (async function init(){
   renderToday();
   renderFilters();
+  renderTeamPersonChips();
   document.getElementById('team-due-date').value = todayKey();
   setStatus('cargando...');
   await loadPlan();
@@ -2345,6 +2516,267 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   renderTaskFilters();
   await loadPersonalTasks();
   renderPersonalTasks();
+})();
+
+/* ===== Calendario de contenido (compartido: Ariel + Stef) ===== */
+const CAL_TYPES = {reel:'Reel', foto:'Foto', story:'Story', carrusel:'Carrusel', video:'Video', otro:'Otro'};
+const CAL_STATUS = {idea:'Idea', grabado:'Grabado', editado:'Editado', publicado:'Publicado'};
+const CAL_STATUS_COLOR = {idea:'#847d70', grabado:'#8b4a2b', editado:'#5b4e9e', publicado:'#2f6b4f'};
+
+let contentCalendar = {};
+let calAdminDate = new Date();
+let calEmpDate = new Date();
+let calModalDateKey = null;
+let calModalScope = 'admin';
+let calAdminFilterPerson = 'todos';
+
+function renderCalPersonFilter(){
+  const el = document.getElementById('cal-person-filter');
+  if(!el) return;
+  const options = [['todos','Todos'], ...Object.entries(ACTIVE_PEOPLE)];
+  el.innerHTML = options.map(([k,v])=>
+    `<div class="chip cal-filter-chip ${k===calAdminFilterPerson?'active':''}" data-person="${k}">${v}</div>`
+  ).join('');
+  el.querySelectorAll('.cal-filter-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      calAdminFilterPerson = chip.dataset.person;
+      renderCalPersonFilter();
+      renderCalendarMonth('admin');
+    });
+  });
+}
+
+async function loadContentCalendar(){
+  contentCalendar = (await fbGet('contentCalendar')) || {};
+}
+async function saveCalendarDay(dStr){
+  const items = contentCalendar[dStr];
+  if(items && items.length){
+    await fbSet('contentCalendar/'+dStr, items);
+  }else{
+    await fbSet('contentCalendar/'+dStr, null);
+    delete contentCalendar[dStr];
+  }
+}
+
+function calSelectOptionsHtml(map, selected){
+  return Object.entries(map).map(([k,v])=>`<option value="${k}" ${k===selected?'selected':''}>${v}</option>`).join('');
+}
+
+function renderCalLegend(elId){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  el.innerHTML = Object.entries(CAL_STATUS).map(([k,v])=>
+    `<div class="cal-legend-item"><span class="cal-legend-dot" style="background:${CAL_STATUS_COLOR[k]}"></span>${v}</div>`
+  ).join('');
+}
+
+function renderCalDow(elId){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  const names = ['D','L','M','M','J','V','S'];
+  el.innerHTML = names.map(n=>`<div class="cal-dow">${n}</div>`).join('');
+}
+
+function getTeamTasksForDate(dStr, scope){
+  let tasks = teamTasks.filter(t => t.repeatDaily || t.dueDate === dStr);
+  if(scope === 'emp' && employeePersona){
+    tasks = tasks.filter(t => t.person === employeePersona || t.person === 'general');
+  }
+  if(scope === 'admin' && calAdminFilterPerson !== 'todos'){
+    tasks = tasks.filter(t => t.person === calAdminFilterPerson);
+  }
+  return tasks;
+}
+
+function renderCalendarMonth(scope){
+  const date = scope==='admin' ? calAdminDate : calEmpDate;
+  const gridId = scope==='admin' ? 'cal-grid' : 'ecal-grid';
+  const labelId = scope==='admin' ? 'cal-month-label' : 'ecal-month-label';
+  const legendId = scope==='admin' ? 'cal-legend' : 'ecal-legend';
+  const dowId = scope==='admin' ? 'cal-dow-row' : 'ecal-dow-row';
+  if(!document.getElementById(gridId)) return;
+
+  renderCalLegend(legendId);
+  renderCalDow(dowId);
+
+  const label = date.toLocaleDateString('es-AR',{month:'long', year:'numeric'});
+  document.getElementById(labelId).textContent = label.charAt(0).toUpperCase()+label.slice(1);
+
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const firstOfMonth = new Date(year, month, 1);
+  const startOffset = firstOfMonth.getDay();
+  const gridStart = new Date(year, month, 1 - startOffset);
+  const todayStr = dateKey(new Date());
+
+  let html = '';
+  for(let i=0;i<42;i++){
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate()+i);
+    const dStr = dateKey(d);
+    const contentItems = contentCalendar[dStr] || [];
+    const teamItems = getTeamTasksForDate(dStr, scope);
+    const isOtherMonth = d.getMonth() !== month;
+    const isToday = dStr === todayStr;
+
+    const taskChips = teamItems.map(t=>{
+      const done = isTaskDoneForDate(t, dStr);
+      const showWho = scope==='admin' && calAdminFilterPerson === 'todos' && PEOPLE[t.person];
+      const who = showWho ? PEOPLE[t.person]+': ' : '';
+      const icon = t.repeatDaily ? '🔁' : '📌';
+      return `<div class="cal-item-chip cal-task-chip ${done?'done':''}">${icon} ${escapeHtml(who)}${escapeHtml(t.text)}</div>`;
+    });
+    const contentChips = contentItems.map(it=>
+      `<div class="cal-item-chip"><span class="cal-item-dot" style="background:${CAL_STATUS_COLOR[it.status]||'#847d70'}"></span>${escapeHtml(it.title)}</div>`
+    );
+    const allChips = [...taskChips, ...contentChips];
+    const shown = allChips.slice(0,3);
+    const chipsHtml = shown.join('');
+    const moreHtml = allChips.length>3 ? `<div class="cal-more">+${allChips.length-3} más</div>` : '';
+    html += `<div class="cal-day ${isOtherMonth?'other-month':''} ${isToday?'today':''}" data-date="${dStr}">
+      <div class="cal-day-num">${d.getDate()}</div>
+      ${chipsHtml}${moreHtml}
+    </div>`;
+  }
+  document.getElementById(gridId).innerHTML = html;
+
+  document.getElementById(gridId).querySelectorAll('.cal-day').forEach(cell=>{
+    cell.addEventListener('click', ()=>{ openCalDayModal(cell.dataset.date, scope); });
+  });
+}
+
+function changeCalMonth(scope, delta){
+  if(scope==='admin'){ calAdminDate.setMonth(calAdminDate.getMonth()+delta); }
+  else{ calEmpDate.setMonth(calEmpDate.getMonth()+delta); }
+  renderCalendarMonth(scope);
+}
+
+function renderCalDayTeamTasks(){
+  const el = document.getElementById('cal-day-team-tasks');
+  if(!el) return;
+  const tasks = getTeamTasksForDate(calModalDateKey, calModalScope);
+  if(!tasks.length){
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = `<div class="cal-day-team-tasks-label">Tareas del equipo ese día</div>` + tasks.map(t=>{
+    const done = isTaskDoneForDate(t, calModalDateKey);
+    const who = PEOPLE[t.person] || t.person;
+    const icon = t.repeatDaily ? '🔁' : '📌';
+    return `<div class="cal-day-item-row cal-day-team-row">
+      <span class="cal-item-dot" style="background:#25231f"></span>
+      <div class="cal-day-item-main">
+        <div class="cal-day-item-title ${done?'done':''}">${icon} ${escapeHtml(who)}: ${escapeHtml(t.text)}</div>
+      </div>
+    </div>`;
+  }).join('') + `<div class="cal-day-team-tasks-hint">Se gestionan desde "Control equipo" / "Mis tareas"</div>`;
+}
+
+function renderCalDayItemsList(){
+  const items = contentCalendar[calModalDateKey] || [];
+  const el = document.getElementById('cal-day-items');
+  if(!items.length){
+    el.innerHTML = '<div class="empty">Sin contenido cargado para este día.</div>';
+    return;
+  }
+  el.innerHTML = items.map(it=>`
+    <div class="cal-day-item-row" data-id="${it.id}">
+      <span class="cal-item-dot" style="background:${CAL_STATUS_COLOR[it.status]||'#847d70'}"></span>
+      <div class="cal-day-item-main">
+        <div class="cal-day-item-title">${escapeHtml(it.title)}</div>
+        <div class="cal-day-item-meta">
+          <select class="cal-item-type-select" data-id="${it.id}">${calSelectOptionsHtml(CAL_TYPES, it.type)}</select>
+          <select class="cal-item-status-select" data-id="${it.id}">${calSelectOptionsHtml(CAL_STATUS, it.status)}</select>
+        </div>
+      </div>
+      <button class="cal-day-item-del" data-id="${it.id}">✕</button>
+    </div>
+  `).join('');
+
+  el.querySelectorAll('.cal-item-type-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const item = (contentCalendar[calModalDateKey]||[]).find(x=>x.id===sel.dataset.id);
+      if(item){ item.type = sel.value; await saveCalendarDay(calModalDateKey); renderCalendarMonth('admin'); renderCalendarMonth('emp'); }
+    });
+  });
+  el.querySelectorAll('.cal-item-status-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const item = (contentCalendar[calModalDateKey]||[]).find(x=>x.id===sel.dataset.id);
+      if(item){ item.status = sel.value; await saveCalendarDay(calModalDateKey); renderCalendarMonth('admin'); renderCalendarMonth('emp'); }
+    });
+  });
+  el.querySelectorAll('.cal-day-item-del').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      contentCalendar[calModalDateKey] = (contentCalendar[calModalDateKey]||[]).filter(x=>x.id!==btn.dataset.id);
+      await saveCalendarDay(calModalDateKey);
+      renderCalDayItemsList();
+      renderCalendarMonth('admin'); renderCalendarMonth('emp');
+    });
+  });
+}
+
+function openCalDayModal(dStr, scope){
+  calModalDateKey = dStr;
+  calModalScope = scope || 'admin';
+  const d = new Date(dStr+'T00:00:00');
+  const label = d.toLocaleDateString('es-AR',{weekday:'long', day:'numeric', month:'long'});
+  document.getElementById('cal-day-modal-title').textContent = label.charAt(0).toUpperCase()+label.slice(1);
+  document.getElementById('cal-new-type').innerHTML = calSelectOptionsHtml(CAL_TYPES,'reel');
+  document.getElementById('cal-new-status').innerHTML = calSelectOptionsHtml(CAL_STATUS,'idea');
+  document.getElementById('cal-new-title').value = '';
+  renderCalDayTeamTasks();
+  renderCalDayItemsList();
+  document.getElementById('cal-day-modal').classList.add('open');
+}
+
+function closeCalDayModal(){
+  document.getElementById('cal-day-modal').classList.remove('open');
+  calModalDateKey = null;
+}
+
+async function addCalItem(){
+  const title = document.getElementById('cal-new-title').value.trim();
+  if(!title) return;
+  const type = document.getElementById('cal-new-type').value;
+  const status = document.getElementById('cal-new-status').value;
+  if(!contentCalendar[calModalDateKey]) contentCalendar[calModalDateKey] = [];
+  contentCalendar[calModalDateKey].push({ id: genChecklistId('cal'), title, type, status });
+  await saveCalendarDay(calModalDateKey);
+  document.getElementById('cal-new-title').value = '';
+  renderCalDayItemsList();
+  renderCalendarMonth('admin');
+  renderCalendarMonth('emp');
+}
+
+document.getElementById('cal-prev-month').addEventListener('click', ()=>changeCalMonth('admin',-1));
+document.getElementById('cal-next-month').addEventListener('click', ()=>changeCalMonth('admin',1));
+document.getElementById('ecal-prev-month').addEventListener('click', ()=>changeCalMonth('emp',-1));
+document.getElementById('ecal-next-month').addEventListener('click', ()=>changeCalMonth('emp',1));
+document.getElementById('cal-add-item-btn').addEventListener('click', addCalItem);
+document.getElementById('cal-day-modal-close').addEventListener('click', closeCalDayModal);
+document.getElementById('cal-day-modal').addEventListener('click',(e)=>{
+  if(e.target.id === 'cal-day-modal') closeCalDayModal();
+});
+
+document.querySelectorAll('.emp-tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.emp-tab-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('emp-tab-tareas').classList.remove('active');
+    document.getElementById('emp-tab-calendario').classList.remove('active');
+    document.getElementById('emp-tab-'+btn.dataset.empTab).classList.add('active');
+  });
+});
+
+(async function initContentCalendar(){
+  await loadContentCalendar();
+  renderCalPersonFilter();
+  renderCalendarMonth('admin');
+  renderCalendarMonth('emp');
+  if(employeePersona === 'stef'){
+    document.getElementById('employee-tab-nav').style.display = 'flex';
+  }
 })();
 </script>
 </body>
