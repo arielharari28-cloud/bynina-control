@@ -522,7 +522,17 @@
   }
 
   /* Checklist editor (edición de tareas del equipo) */
-  .checklist-editor-hint{
+  .checklist-toggle{
+    font-family:'Inter',sans-serif;
+    font-size:12px;
+    font-weight:600;
+    color:var(--purple);
+    margin:-6px 0 10px 0;
+    cursor:pointer;
+    text-decoration:underline;
+  }
+  .checklist-toggle.active{color:var(--rust);}
+
     font-family:'Inter',sans-serif;
     font-size:12px;
     color:var(--ink-soft);
@@ -817,6 +827,7 @@
 
   <div class="section-title st-purple">Checklist diario del equipo</div>
   <div class="checklist-sub" id="checklist-date"></div>
+  <div class="checklist-toggle" id="checklist-edit-toggle">✏️ Editar checklist (orden, horarios, tareas)</div>
   <div id="checklist"></div>
 
   <div class="checklist-editor" id="checklist-editor" style="display:none;">
@@ -1201,7 +1212,7 @@ function renderChecklist(){
 
 function renderChecklistEditor(){
   const panel = document.getElementById('checklist-editor');
-  if(!editMode){
+  if(!checklistEditMode){
     panel.style.display = 'none';
     return;
   }
@@ -1438,7 +1449,6 @@ function applyEditMode(){
     noemi.setAttribute('readonly','true');
     document.getElementById('plan-toggle').textContent = 'Soy Ariel — activar edición';
   }
-  renderChecklistEditor();
 }
 
 async function toggleEditMode(){
@@ -1459,6 +1469,40 @@ async function loadEditMode(){
 }
 
 document.getElementById('plan-toggle').addEventListener('click', toggleEditMode);
+
+let checklistEditMode = false;
+const CHECKLIST_EDIT_MODE_KEY = 'control-bynina:checklist-edit-mode';
+
+function applyChecklistEditMode(){
+  const toggle = document.getElementById('checklist-edit-toggle');
+  if(checklistEditMode){
+    toggle.textContent = '✏️ Modo edición activo — tocá para cerrar';
+    toggle.classList.add('active');
+  } else {
+    toggle.textContent = '✏️ Editar checklist (orden, horarios, tareas)';
+    toggle.classList.remove('active');
+  }
+  renderChecklistEditor();
+}
+
+async function toggleChecklistEditMode(){
+  checklistEditMode = !checklistEditMode;
+  applyChecklistEditMode();
+  try{
+    localStorage.setItem(CHECKLIST_EDIT_MODE_KEY, checklistEditMode ? 'true' : 'false');
+  }catch(e){}
+}
+
+async function loadChecklistEditMode(){
+  try{
+    checklistEditMode = localStorage.getItem(CHECKLIST_EDIT_MODE_KEY) === 'true';
+  }catch(e){
+    checklistEditMode = false;
+  }
+  applyChecklistEditMode();
+}
+
+document.getElementById('checklist-edit-toggle').addEventListener('click', toggleChecklistEditMode);
 
 async function loadPlan(){
   try{
@@ -1858,6 +1902,7 @@ document.getElementById('edit-task-modal').addEventListener('click', (e)=>{
   setStatus('cargando...');
   await loadPlan();
   await loadEditMode();
+  await loadChecklistEditMode();
   await loadChecklistConfig();
   await loadChecklist();
   await loadTeamTasks();
