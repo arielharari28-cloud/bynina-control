@@ -324,6 +324,16 @@
     background:var(--rust-soft);
     color:var(--rust);
   }
+  .task-status-select{
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:11px;
+    padding:2px 6px;
+    border-radius:12px;
+    border:1px solid var(--line);
+    background:#fff;
+    color:var(--ink);
+  }
   .ticket-text{
     font-size:14px;
     line-height:1.4;
@@ -877,19 +887,18 @@
     <div class="capture-label">Crear tarea puntual (les aparece a ellos)</div>
     <div class="capture-label" style="margin-top:0;">Para quién (elegí uno o varios)</div>
     <div class="filters" id="team-person-chips"></div>
+    <div class="capture-label">Tema</div>
+    <div class="filters" id="team-category-chips"></div>
     <div class="capture-row">
       <input type="date" id="team-due-date">
       <input type="time" id="team-time-input">
       <textarea id="team-task-text" placeholder="Qué necesitás que haga..."></textarea>
+      <select id="team-repeat"></select>
       <button id="team-add-btn">Crear</button>
     </div>
     <label class="team-involve-check">
       <input type="checkbox" id="team-involve-me">
       Estoy involucrado — agregar también a mi día
-    </label>
-    <label class="check-row">
-      <input type="checkbox" id="team-repeat-daily">
-      🔁 Se repite todos los días
     </label>
   </div>
 
@@ -962,6 +971,8 @@
     </div>
     <div class="capture-label" style="margin-top:0;">Filtrar tareas por persona</div>
     <div class="filters" id="cal-person-filter"></div>
+    <div class="capture-label">Filtrar tareas por tema</div>
+    <div class="filters" id="cal-category-filter"></div>
     <div class="cal-legend" id="cal-legend"></div>
     <div class="cal-dow-row" id="cal-dow-row"></div>
     <div class="cal-grid" id="cal-grid"></div>
@@ -987,19 +998,18 @@
 
   <div class="section-title st-rust">Agregar tarea</div>
   <div class="capture">
+    <div class="capture-label">Tema</div>
+    <div class="filters" id="employee-category-chips"></div>
     <div class="capture-row">
       <input type="date" id="employee-due-date">
       <input type="time" id="employee-time-input">
       <textarea id="employee-task-text" placeholder="Qué tenés que hacer..."></textarea>
+      <select id="employee-repeat"></select>
       <button id="employee-add-btn">Agregar</button>
     </div>
     <label class="check-row">
       <input type="checkbox" id="employee-involve-boss">
       Que esto también le aparezca a Ariel
-    </label>
-    <label class="check-row">
-      <input type="checkbox" id="employee-repeat-daily">
-      🔁 Se repite todos los días
     </label>
   </div>
 
@@ -1031,6 +1041,10 @@
       <select id="edit-task-person"></select>
     </div>
     <div class="modal-field">
+      <label for="edit-task-category">Tema</label>
+      <select id="edit-task-category"></select>
+    </div>
+    <div class="modal-field">
       <label for="edit-task-due">Vence</label>
       <input type="date" id="edit-task-due">
     </div>
@@ -1042,10 +1056,14 @@
       <label for="edit-task-text">Tarea</label>
       <textarea id="edit-task-text"></textarea>
     </div>
-    <label class="check-row">
-      <input type="checkbox" id="edit-task-repeat">
-      🔁 Se repite todos los días
-    </label>
+    <div class="modal-field">
+      <label for="edit-task-status">Estado</label>
+      <select id="edit-task-status"></select>
+    </div>
+    <div class="modal-field">
+      <label for="edit-task-repeat">Repetición</label>
+      <select id="edit-task-repeat"></select>
+    </div>
     <div class="modal-footer">
       <button class="modal-cancel-btn" id="edit-task-cancel">Cancelar</button>
       <button id="edit-task-save">Guardar</button>
@@ -1150,6 +1168,86 @@ const ACTIVE_PEOPLE = Object.fromEntries(
 );
 let activeFilter = 'todos';
 
+/* ===== Tema de la tarea (Web / Diseño / Redes / Marketing / Otro) ===== */
+const TASK_CATEGORIES = {web:'Web', diseno:'Diseño', redes:'Redes', marketing:'Marketing', otro:'Otro'};
+const TASK_CATEGORY_COLOR = {web:'#5b4e9e', diseno:'#8b4a2b', redes:'#2f6b4f', marketing:'#7a3230', otro:'#847d70'};
+
+function categorySelectOptionsHtml(selected){
+  return Object.entries(TASK_CATEGORIES).map(([k,v])=>
+    `<option value="${k}" ${k===(selected||'otro')?'selected':''}>${v}</option>`
+  ).join('');
+}
+
+/* ===== Repetición flexible (ninguna / diaria / semanal / cada 15 días / mensual) ===== */
+const REPEAT_LABELS = {
+  none:'No se repite', daily:'Todos los días', weekly:'Cada semana',
+  biweekly:'Cada 15 días', monthly:'Cada mes'
+};
+
+function repeatSelectOptionsHtml(selected){
+  return Object.entries(REPEAT_LABELS).map(([k,v])=>
+    `<option value="${k}" ${k===(selected||'none')?'selected':''}>${v}</option>`
+  ).join('');
+}
+
+// Compatibilidad: tareas viejas guardaron repeatDaily:true en vez de repeat:'daily'.
+function taskRepeatType(t){
+  if(t.repeat) return t.repeat;
+  return t.repeatDaily ? 'daily' : 'none';
+}
+
+function daysBetweenKeys(aStr, bStr){
+  const a = new Date(aStr+'T00:00:00');
+  const b = new Date(bStr+'T00:00:00');
+  return Math.round((b - a) / 86400000);
+}
+
+// Determina si una tarea con repetición semanal/quincenal/mensual "cae" en dateStr,
+// tomando como ancla la fecha en que se creó/venció originalmente.
+function taskRecursOnDate(t, dateStr){
+  const type = taskRepeatType(t);
+  if(type === 'none') return false;
+  if(type === 'daily') return true;
+  const anchor = t.dueDate || todayKey();
+  if(dateStr < anchor) return false;
+  const diff = daysBetweenKeys(anchor, dateStr);
+  if(type === 'weekly') return diff % 7 === 0;
+  if(type === 'biweekly') return diff % 14 === 0;
+  if(type === 'monthly'){
+    const a = new Date(anchor+'T00:00:00');
+    const d = new Date(dateStr+'T00:00:00');
+    const lastDayOfDMonth = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+    const targetDay = Math.min(a.getDate(), lastDayOfDMonth);
+    return d.getDate() === targetDay;
+  }
+  return false;
+}
+
+/* ===== Estado de la tarea (Pendiente / En proceso / Finalizado) ===== */
+const TASK_STATUS = {pendiente:'Pendiente', proceso:'En proceso', finalizado:'Finalizado'};
+const TASK_STATUS_COLOR = {pendiente:'#8b4a2b', proceso:'#5b4e9e', finalizado:'#2f6b4f'};
+function getTaskStatusForDate(t, dateStr){
+  if(taskRepeatType(t) !== 'none'){
+    return (t.statusDates && t.statusDates[dateStr]) || 'pendiente';
+  }
+  return t.status || (t.resolved ? 'finalizado' : 'pendiente');
+}
+function setTaskStatusForDate(t, dateStr, status){
+  if(taskRepeatType(t) !== 'none'){
+    if(!t.statusDates) t.statusDates = {};
+    t.statusDates[dateStr] = status;
+    if(!t.doneDates) t.doneDates = {};
+    if(status === 'finalizado') t.doneDates[dateStr] = true; else delete t.doneDates[dateStr];
+  } else {
+    t.status = status;
+    t.resolved = (status === 'finalizado');
+  }
+}
+function taskStatusSelectHtml(t, dateStr){
+  const current = getTaskStatusForDate(t, dateStr);
+  return Object.entries(TASK_STATUS).map(([k,v])=>`<option value="${k}" ${k===current?'selected':''}>${v}</option>`).join('');
+}
+
 // ===== Vista de empleado (link propio por persona) =====
 function getPersonaParam(){
   const params = new URLSearchParams(window.location.search);
@@ -1248,27 +1346,22 @@ function nextDayKey(dateStr){
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// Una tarea diaria no tiene un único "resolved": se marca hecha por día (doneDates).
+// Una tarea que se repite no tiene un único "resolved": se marca hecha por día (doneDates).
 // Una tarea normal sigue usando el campo resolved de siempre.
 function isTaskDoneForDate(t, dateStr){
-  if(t.repeatDaily) return !!(t.doneDates && t.doneDates[dateStr]);
-  return !!t.resolved;
+  return getTaskStatusForDate(t, dateStr) === 'finalizado';
 }
 
 function toggleTaskDoneForDate(t, dateStr){
-  if(t.repeatDaily){
-    if(!t.doneDates) t.doneDates = {};
-    if(t.doneDates[dateStr]) delete t.doneDates[dateStr];
-    else t.doneDates[dateStr] = true;
-  } else {
-    t.resolved = !t.resolved;
-  }
+  const current = getTaskStatusForDate(t, dateStr);
+  setTaskStatusForDate(t, dateStr, current === 'finalizado' ? 'pendiente' : 'finalizado');
 }
 
-// Una tarea diaria "aplica" a cualquier día; una tarea normal solo al día de su dueDate.
+// Una tarea que se repite "aplica" según su frecuencia; una tarea normal solo al día de su dueDate.
 // Si estamos parados en el día de hoy, también arrastramos las que quedaron atrasadas de días anteriores.
 function taskAppliesToDate(t, dateStr){
-  if(t.repeatDaily) return true;
+  const type = taskRepeatType(t);
+  if(type !== 'none') return taskRecursOnDate(t, dateStr);
   if(t.dueDate === dateStr) return true;
   if(dateStr === todayKey() && t.dueDate && t.dueDate < dateStr && !t.resolved) return true;
   return false;
@@ -1351,6 +1444,17 @@ function renderChecklist(){
   });
   el.querySelectorAll('.team-edit').forEach(btn=>{
     btn.addEventListener('click', ()=>openEditTeamTask(btn.dataset.id));
+  });
+  el.querySelectorAll('.task-status-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const t = teamTasks.find(x=>x.id===sel.dataset.id);
+      if(!t) return;
+      setTaskStatusForDate(t, todayKey(), sel.value);
+      renderChecklist();
+      renderLists();
+      refreshCalendars();
+      await saveTeamTasks();
+    });
   });
 }
 
@@ -1514,6 +1618,17 @@ function renderLists(){
   document.querySelectorAll('#pending-list .team-postpone, #resolved-list .team-postpone').forEach(btn=>{
     btn.addEventListener('click', ()=>postponeTeamTask(btn.dataset.id));
   });
+  document.querySelectorAll('#pending-list .task-status-select, #resolved-list .task-status-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const t = teamTasks.find(x=>x.id===sel.dataset.id);
+      if(!t) return;
+      setTaskStatusForDate(t, todayKey(), sel.value);
+      renderLists();
+      renderChecklist();
+      refreshCalendars();
+      await saveTeamTasks();
+    });
+  });
 }
 
 function escapeHtml(str){
@@ -1554,7 +1669,7 @@ async function toggleTeamTaskResolved(id){
 
 async function postponeTeamTask(id){
   const t = teamTasks.find(x=>x.id===id);
-  if(!t || t.repeatDaily) return;
+  if(!t || taskRepeatType(t) !== 'none') return;
   t.dueDate = nextDayKey(t.dueDate || todayKey());
   if(employeePersona){
     renderEmployeeView();
@@ -1724,19 +1839,35 @@ function isOverdue(dueStr, resolved){
   return dueStr < today;
 }
 
+function categoryTagHtml(t){
+  const cat = t.category || 'otro';
+  const label = TASK_CATEGORIES[cat] || TASK_CATEGORIES.otro;
+  const color = TASK_CATEGORY_COLOR[cat] || TASK_CATEGORY_COLOR.otro;
+  return `<span class="due-badge cat-badge" style="background:${color}22;color:${color};">${escapeHtml(label)}</span>`;
+}
+
+function repeatBadgeHtml(t){
+  const type = taskRepeatType(t);
+  if(type === 'none') return null;
+  return `<span class="due-badge repeat-badge">🔁 ${REPEAT_LABELS[type].toLowerCase()}</span>`;
+}
+
 function teamTicketHtml(t){
   const done = isTaskDoneForDate(t, todayKey());
-  const overdue = !t.repeatDaily && isOverdue(t.dueDate, done);
-  const dueLabel = t.repeatDaily ? `<span class="due-badge repeat-badge">🔁 diario</span>` :
+  const repType = taskRepeatType(t);
+  const overdue = repType==='none' && isOverdue(t.dueDate, done);
+  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) :
     (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
-  const postponeBtn = t.repeatDaily ? '' : `<button class="edit-btn team-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
+  const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn team-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   return `
     <div class="ticket ${done?'resolved':''}">
       <div class="ticket-check team-check" data-id="${t.id}">${done?'✓':''}</div>
       <div class="ticket-body">
         <div class="ticket-meta">
           <span class="tag ${t.person}">${PEOPLE[t.person] || t.person}</span>
+          ${categoryTagHtml(t)}
+          <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, todayKey())}</select>
           <span class="ticket-time">${fmtTime(t.ts)}</span>
           ${timeLabel}
           ${dueLabel}
@@ -1752,15 +1883,16 @@ function teamTicketHtml(t){
 
 function teamTaskRowHtml(t){
   const done = isTaskDoneForDate(t, todayKey());
-  const overdue = !t.repeatDaily && isOverdue(t.dueDate, done);
-  const dueLabel = t.repeatDaily ? `<span class="due-badge repeat-badge">🔁 diario</span>` :
+  const repType = taskRepeatType(t);
+  const overdue = repType==='none' && isOverdue(t.dueDate, done);
+  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) :
     (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
-  const postponeBtn = t.repeatDaily ? '' : `<button class="edit-btn team-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
+  const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn team-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   return `
     <div class="check-item check-team-item">
       <div class="ticket-check team-check" data-id="${t.id}">${done?'✓':''}</div>
-      <label class="check-team-label">${escapeHtml(t.text)} ${timeLabel} ${dueLabel}</label>
+      <label class="check-team-label">${categoryTagHtml(t)} <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, todayKey())}</select> ${escapeHtml(t.text)} ${timeLabel} ${dueLabel}</label>
       ${postponeBtn}
       <button class="edit-btn team-edit" data-id="${t.id}" title="Editar">✎</button>
       <button class="del-btn team-del" data-id="${t.id}" title="Eliminar">×</button>
@@ -1771,16 +1903,19 @@ function teamTaskRowHtml(t){
 /* ===== Vista de empleado: solo sus tareas, sin editar/eliminar ===== */
 function employeeTicketHtml(t){
   const done = isTaskDoneForDate(t, todayKey());
-  const overdue = !t.repeatDaily && isOverdue(t.dueDate, done);
-  const dueLabel = t.repeatDaily ? `<span class="due-badge repeat-badge">🔁 diario</span>` :
+  const repType = taskRepeatType(t);
+  const overdue = repType==='none' && isOverdue(t.dueDate, done);
+  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) :
     (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
-  const postponeBtn = t.repeatDaily ? '' : `<button class="edit-btn employee-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
+  const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn employee-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   return `
     <div class="ticket ${done?'resolved':''}">
       <div class="ticket-check employee-check" data-id="${t.id}">${done?'✓':''}</div>
       <div class="ticket-body">
         <div class="ticket-meta">
+          ${categoryTagHtml(t)}
+          <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, todayKey())}</select>
           ${timeLabel}
           ${dueLabel}
         </div>
@@ -1861,6 +1996,16 @@ function renderEmployeeView(){
   document.querySelectorAll('#employee-pending-list .employee-edit, #employee-resolved-list .employee-edit').forEach(btn=>{
     btn.addEventListener('click', ()=>openEditTeamTask(btn.dataset.id));
   });
+  document.querySelectorAll('#employee-pending-list .task-status-select, #employee-resolved-list .task-status-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const t = teamTasks.find(x=>x.id===sel.dataset.id);
+      if(!t) return;
+      setTaskStatusForDate(t, todayKey(), sel.value);
+      renderEmployeeView();
+      refreshCalendars();
+      await saveTeamTasks();
+    });
+  });
 }
 
 /* ===== Panel para copiar el link de cada empleado ===== */
@@ -1908,12 +2053,27 @@ function renderTeamPersonChips(){
   });
 }
 
+let teamNewTaskCategory = 'otro';
+function renderTeamCategoryChips(){
+  const el = document.getElementById('team-category-chips');
+  if(!el) return;
+  el.innerHTML = Object.entries(TASK_CATEGORIES).map(([k,v])=>
+    `<div class="chip team-category-chip ${k===teamNewTaskCategory?'active':''}" data-category="${k}">${v}</div>`
+  ).join('');
+  el.querySelectorAll('.team-category-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      teamNewTaskCategory = chip.dataset.category;
+      renderTeamCategoryChips();
+    });
+  });
+}
+
 async function addTeamTask(){
   const textEl = document.getElementById('team-task-text');
   const dueEl = document.getElementById('team-due-date');
   const timeEl = document.getElementById('team-time-input');
   const involveEl = document.getElementById('team-involve-me');
-  const repeatEl = document.getElementById('team-repeat-daily');
+  const repeatEl = document.getElementById('team-repeat');
   const text = textEl.value.trim();
   if(!text) return;
   let selectedPeople = Array.from(document.querySelectorAll('.team-person-chip.active')).map(c=>c.dataset.person);
@@ -1923,16 +2083,18 @@ async function addTeamTask(){
   const dueDate = dueEl.value || '';
   const time = timeEl.value || '';
   const involveMe = involveEl.checked;
-  const repeatDaily = repeatEl.checked;
+  const repeat = repeatEl.value || 'none';
+  const category = teamNewTaskCategory;
   const newTasks = selectedPeople.map(person => ({
     id: 't' + Date.now() + Math.random().toString(36).slice(2,7),
     person: person,
     text: text,
+    category: category,
     dueDate: dueDate,
     time: time,
     ts: Date.now(),
     resolved: false,
-    repeatDaily: repeatDaily
+    repeat: repeat
   }));
   newTasks.forEach(t => teamTasks.push(t));
   textEl.value = '';
@@ -1943,13 +2105,13 @@ async function addTeamTask(){
   refreshCalendars();
   await saveTeamTasks();
   if(involveMe){
-    const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTasks[0].id, repeatDaily);
+    const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTasks[0].id, repeat==='daily');
     newTasks[0].linkedPersonalTaskId = linkedId;
     await saveTeamTasks();
     setStatus('guardado y agregado a tu día');
   }
   involveEl.checked = false;
-  repeatEl.checked = false;
+  repeatEl.value = 'none';
   btn.disabled = false;
   textEl.focus();
 }
@@ -1963,12 +2125,27 @@ document.getElementById('team-task-text').addEventListener('keydown', (e)=>{
 });
 
 /* ===== Vista de empleado: agregar su propia tarea ===== */
+let employeeNewTaskCategory = 'otro';
+function renderEmployeeCategoryChips(){
+  const el = document.getElementById('employee-category-chips');
+  if(!el) return;
+  el.innerHTML = Object.entries(TASK_CATEGORIES).map(([k,v])=>
+    `<div class="chip employee-category-chip ${k===employeeNewTaskCategory?'active':''}" data-category="${k}">${v}</div>`
+  ).join('');
+  el.querySelectorAll('.employee-category-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      employeeNewTaskCategory = chip.dataset.category;
+      renderEmployeeCategoryChips();
+    });
+  });
+}
+
 async function addEmployeeTask(){
   const textEl = document.getElementById('employee-task-text');
   const dueEl = document.getElementById('employee-due-date');
   const timeEl = document.getElementById('employee-time-input');
   const involveEl = document.getElementById('employee-involve-boss');
-  const repeatEl = document.getElementById('employee-repeat-daily');
+  const repeatEl = document.getElementById('employee-repeat');
   const text = textEl.value.trim();
   if(!text) return;
   const btn = document.getElementById('employee-add-btn');
@@ -1976,16 +2153,17 @@ async function addEmployeeTask(){
   const dueDate = dueEl.value || '';
   const time = timeEl.value || '';
   const involveBoss = involveEl.checked;
-  const repeatDaily = repeatEl.checked;
+  const repeat = repeatEl.value || 'none';
   const newTeamTask = {
     id: 't' + Date.now() + Math.random().toString(36).slice(2,7),
     person: employeePersona,
     text: text,
+    category: employeeNewTaskCategory,
     dueDate: dueDate,
     time: time,
     ts: Date.now(),
     resolved: false,
-    repeatDaily: repeatDaily
+    repeat: repeat
   };
   teamTasks.push(newTeamTask);
   textEl.value = '';
@@ -1994,12 +2172,12 @@ async function addEmployeeTask(){
   refreshCalendars();
   await saveTeamTasks();
   if(involveBoss){
-    const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTeamTask.id, repeatDaily);
+    const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTeamTask.id, repeat==='daily');
     newTeamTask.linkedPersonalTaskId = linkedId;
     await saveTeamTasks();
   }
   involveEl.checked = false;
-  repeatEl.checked = false;
+  repeatEl.value = 'none';
   btn.disabled = false;
   textEl.focus();
 }
@@ -2025,10 +2203,12 @@ function openEditTeamTask(id){
   editingTeamTaskId = id;
   populateEditPersonSelect();
   document.getElementById('edit-task-person').value = t.person;
+  document.getElementById('edit-task-category').innerHTML = categorySelectOptionsHtml(t.category || 'otro');
   document.getElementById('edit-task-due').value = t.dueDate || '';
   document.getElementById('edit-task-time').value = t.time || '';
   document.getElementById('edit-task-text').value = t.text;
-  document.getElementById('edit-task-repeat').checked = !!t.repeatDaily;
+  document.getElementById('edit-task-status').innerHTML = taskStatusSelectHtml(t, todayKey());
+  document.getElementById('edit-task-repeat').innerHTML = repeatSelectOptionsHtml(taskRepeatType(t));
   document.getElementById('edit-task-person-field').style.display = employeePersona ? 'none' : '';
   document.getElementById('edit-task-modal').classList.add('open');
 }
@@ -2045,9 +2225,12 @@ async function saveEditTeamTask(){
   if(!newText) return;
   t.text = newText;
   t.person = employeePersona ? employeePersona : document.getElementById('edit-task-person').value;
+  t.category = document.getElementById('edit-task-category').value;
   t.dueDate = document.getElementById('edit-task-due').value || '';
   t.time = document.getElementById('edit-task-time').value || '';
-  t.repeatDaily = document.getElementById('edit-task-repeat').checked;
+  t.repeat = document.getElementById('edit-task-repeat').value;
+  delete t.repeatDaily;
+  setTaskStatusForDate(t, todayKey(), document.getElementById('edit-task-status').value);
   closeEditTeamTask();
   if(employeePersona){
     renderEmployeeView();
@@ -2069,6 +2252,8 @@ document.getElementById('edit-task-modal').addEventListener('click', (e)=>{
   renderToday();
   renderFilters();
   renderTeamPersonChips();
+  renderTeamCategoryChips();
+  document.getElementById('team-repeat').innerHTML = repeatSelectOptionsHtml('none');
   document.getElementById('team-due-date').value = todayKey();
   setStatus('cargando...');
   await loadPlan();
@@ -2085,6 +2270,8 @@ document.getElementById('edit-task-modal').addEventListener('click', (e)=>{
     document.getElementById('admin-wrap').style.display = 'none';
     document.getElementById('employee-wrap').style.display = '';
     document.getElementById('employee-due-date').value = todayKey();
+    renderEmployeeCategoryChips();
+    document.getElementById('employee-repeat').innerHTML = repeatSelectOptionsHtml('none');
     renderEmployeeView();
     setStatus('listo');
   }
@@ -2383,7 +2570,7 @@ async function togglePersonalTaskResolved(id){
 
 async function postponePersonalTask(id){
   const t = personalTasks.find(x=>x.id===id);
-  if(!t || t.repeatDaily) return;
+  if(!t || taskRepeatType(t) !== 'none') return;
   t.dueDate = nextDayKey(t.dueDate || dateKey(currentDate));
   renderPersonalTasks();
   await savePersonalTasks();
@@ -2529,6 +2716,7 @@ let calEmpDate = new Date();
 let calModalDateKey = null;
 let calModalScope = 'admin';
 let calAdminFilterPerson = 'todos';
+let calAdminFilterCategory = 'todos';
 
 function renderCalPersonFilter(){
   const el = document.getElementById('cal-person-filter');
@@ -2541,6 +2729,22 @@ function renderCalPersonFilter(){
     chip.addEventListener('click', ()=>{
       calAdminFilterPerson = chip.dataset.person;
       renderCalPersonFilter();
+      renderCalendarMonth('admin');
+    });
+  });
+}
+
+function renderCalCategoryFilter(){
+  const el = document.getElementById('cal-category-filter');
+  if(!el) return;
+  const options = [['todos','Todos'], ...Object.entries(TASK_CATEGORIES)];
+  el.innerHTML = options.map(([k,v])=>
+    `<div class="chip cal-cat-filter-chip ${k===calAdminFilterCategory?'active':''}" data-category="${k}">${v}</div>`
+  ).join('');
+  el.querySelectorAll('.cal-cat-filter-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      calAdminFilterCategory = chip.dataset.category;
+      renderCalCategoryFilter();
       renderCalendarMonth('admin');
     });
   });
@@ -2579,12 +2783,15 @@ function renderCalDow(elId){
 }
 
 function getTeamTasksForDate(dStr, scope){
-  let tasks = teamTasks.filter(t => t.repeatDaily || t.dueDate === dStr);
+  let tasks = teamTasks.filter(t => taskRepeatType(t)!=='none' ? taskRecursOnDate(t, dStr) : t.dueDate === dStr);
   if(scope === 'emp' && employeePersona){
     tasks = tasks.filter(t => t.person === employeePersona || t.person === 'general');
   }
   if(scope === 'admin' && calAdminFilterPerson !== 'todos'){
     tasks = tasks.filter(t => t.person === calAdminFilterPerson);
+  }
+  if(scope === 'admin' && calAdminFilterCategory !== 'todos'){
+    tasks = tasks.filter(t => (t.category || 'otro') === calAdminFilterCategory);
   }
   return tasks;
 }
@@ -2624,8 +2831,9 @@ function renderCalendarMonth(scope){
       const done = isTaskDoneForDate(t, dStr);
       const showWho = scope==='admin' && calAdminFilterPerson === 'todos' && PEOPLE[t.person];
       const who = showWho ? PEOPLE[t.person]+': ' : '';
-      const icon = t.repeatDaily ? '🔁' : '📌';
-      return `<div class="cal-item-chip cal-task-chip ${done?'done':''}">${icon} ${escapeHtml(who)}${escapeHtml(t.text)}</div>`;
+      const icon = taskRepeatType(t)!=='none' ? '🔁' : '📌';
+      const catColor = TASK_CATEGORY_COLOR[t.category] || TASK_CATEGORY_COLOR.otro;
+      return `<div class="cal-item-chip cal-task-chip ${done?'done':''}"><span class="cal-item-dot" style="background:${catColor}"></span>${icon} ${escapeHtml(who)}${escapeHtml(t.text)}</div>`;
     });
     const contentChips = contentItems.map(it=>
       `<div class="cal-item-chip"><span class="cal-item-dot" style="background:${CAL_STATUS_COLOR[it.status]||'#847d70'}"></span>${escapeHtml(it.title)}</div>`
@@ -2663,11 +2871,13 @@ function renderCalDayTeamTasks(){
   el.innerHTML = `<div class="cal-day-team-tasks-label">Tareas del equipo ese día</div>` + tasks.map(t=>{
     const done = isTaskDoneForDate(t, calModalDateKey);
     const who = PEOPLE[t.person] || t.person;
-    const icon = t.repeatDaily ? '🔁' : '📌';
+    const icon = taskRepeatType(t)!=='none' ? '🔁' : '📌';
+    const catColor = TASK_CATEGORY_COLOR[t.category] || TASK_CATEGORY_COLOR.otro;
+    const catLabel = TASK_CATEGORIES[t.category] || TASK_CATEGORIES.otro;
     return `<div class="cal-day-item-row cal-day-team-row">
-      <span class="cal-item-dot" style="background:#25231f"></span>
+      <span class="cal-item-dot" style="background:${catColor}"></span>
       <div class="cal-day-item-main">
-        <div class="cal-day-item-title ${done?'done':''}">${icon} ${escapeHtml(who)}: ${escapeHtml(t.text)}</div>
+        <div class="cal-day-item-title ${done?'done':''}">${icon} ${escapeHtml(who)}: ${escapeHtml(t.text)} <span style="color:${catColor};font-size:10px;font-weight:600;">(${escapeHtml(catLabel)})</span></div>
       </div>
     </div>`;
   }).join('') + `<div class="cal-day-team-tasks-hint">Se gestionan desde "Control equipo" / "Mis tareas"</div>`;
