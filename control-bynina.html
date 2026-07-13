@@ -440,6 +440,25 @@
   .cal-nav .cal-month-label{
     font-family:'Poppins',sans-serif;font-weight:600;font-size:15px;text-align:center;flex:1;
   }
+  .cal-day-summary{
+    display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;
+  }
+  .cal-summary-chip{
+    font-family:'Inter',sans-serif;font-weight:600;font-size:11px;
+    padding:4px 10px;border-radius:12px;
+  }
+  .cal-summary-empty{
+    font-family:'Inter',sans-serif;font-size:12px;color:var(--ink-soft);
+  }
+  .cal-day-team-row{display:flex;align-items:center;}
+  .cal-day-team-row .cal-day-item-main{flex:1;}
+  .cal-day-team-actions{display:flex;gap:4px;flex:0 0 auto;}
+  .cal-day-team-actions button{
+    background:none;border:1px solid var(--line);color:var(--ink-soft);
+    border-radius:50%;width:26px;height:26px;font-size:12px;padding:0;
+  }
+  .cal-day-team-actions .cal-day-team-del{color:var(--red);border-color:var(--red-soft);}
+
   .cal-legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
   .cal-legend-item{
     display:flex;align-items:center;gap:5px;font-family:'Inter',sans-serif;
@@ -1033,7 +1052,7 @@
   <div class="status-bar" id="employee-status-bar">cargando...</div>
 </div>
 
-<div class="modal-overlay" id="edit-task-modal">
+<div class="modal-overlay" id="edit-task-modal" style="z-index:200;">
   <div class="modal-box">
     <div class="modal-title">Editar tarea</div>
     <div class="modal-field" id="edit-task-person-field">
@@ -1111,6 +1130,7 @@
 <div class="modal-overlay" id="cal-day-modal">
   <div class="modal-box">
     <div class="modal-title" id="cal-day-modal-title">Contenido del día</div>
+    <div id="cal-day-summary" class="cal-day-summary"></div>
     <div id="cal-day-team-tasks"></div>
     <div id="cal-day-items"></div>
     <div class="cal-add-form">
@@ -2191,6 +2211,7 @@ document.getElementById('employee-task-text').addEventListener('keydown', (e)=>{
 });
 
 let editingTeamTaskId = null;
+let editingTeamTaskDateStr = null;
 
 function populateEditPersonSelect(){
   const sel = document.getElementById('edit-task-person');
@@ -2201,13 +2222,15 @@ function openEditTeamTask(id){
   const t = teamTasks.find(x=>x.id===id);
   if(!t) return;
   editingTeamTaskId = id;
+  const calOpen = document.getElementById('cal-day-modal').classList.contains('open');
+  editingTeamTaskDateStr = (calOpen && calModalDateKey) ? calModalDateKey : todayKey();
   populateEditPersonSelect();
   document.getElementById('edit-task-person').value = t.person;
   document.getElementById('edit-task-category').innerHTML = categorySelectOptionsHtml(t.category || 'otro');
   document.getElementById('edit-task-due').value = t.dueDate || '';
   document.getElementById('edit-task-time').value = t.time || '';
   document.getElementById('edit-task-text').value = t.text;
-  document.getElementById('edit-task-status').innerHTML = taskStatusSelectHtml(t, todayKey());
+  document.getElementById('edit-task-status').innerHTML = taskStatusSelectHtml(t, editingTeamTaskDateStr);
   document.getElementById('edit-task-repeat').innerHTML = repeatSelectOptionsHtml(taskRepeatType(t));
   document.getElementById('edit-task-person-field').style.display = employeePersona ? 'none' : '';
   document.getElementById('edit-task-modal').classList.add('open');
@@ -2230,7 +2253,7 @@ async function saveEditTeamTask(){
   t.time = document.getElementById('edit-task-time').value || '';
   t.repeat = document.getElementById('edit-task-repeat').value;
   delete t.repeatDaily;
-  setTaskStatusForDate(t, todayKey(), document.getElementById('edit-task-status').value);
+  setTaskStatusForDate(t, editingTeamTaskDateStr || todayKey(), document.getElementById('edit-task-status').value);
   closeEditTeamTask();
   if(employeePersona){
     renderEmployeeView();
@@ -2239,6 +2262,7 @@ async function saveEditTeamTask(){
     renderChecklist();
   }
   refreshCalendars();
+  refreshOpenCalDayModal();
   await saveTeamTasks();
 }
 
@@ -2860,6 +2884,40 @@ function changeCalMonth(scope, delta){
   renderCalendarMonth(scope);
 }
 
+function renderCalDaySummary(){
+  const el = document.getElementById('cal-day-summary');
+  if(!el) return;
+  const tasks = getTeamTasksForDate(calModalDateKey, calModalScope);
+  const counts = {pendiente:0, proceso:0, finalizado:0};
+  tasks.forEach(t=>{
+    const st = getTaskStatusForDate(t, calModalDateKey);
+    counts[st] = (counts[st]||0) + 1;
+  });
+  const contentItems = contentCalendar[calModalDateKey] || [];
+  const parts = [];
+  if(counts.pendiente) parts.push(`<span class="cal-summary-chip" style="background:${TASK_STATUS_COLOR.pendiente}22;color:${TASK_STATUS_COLOR.pendiente}">${counts.pendiente} pendiente${counts.pendiente===1?'':'s'}</span>`);
+  if(counts.proceso) parts.push(`<span class="cal-summary-chip" style="background:${TASK_STATUS_COLOR.proceso}22;color:${TASK_STATUS_COLOR.proceso}">${counts.proceso} en proceso</span>`);
+  if(counts.finalizado) parts.push(`<span class="cal-summary-chip" style="background:${TASK_STATUS_COLOR.finalizado}22;color:${TASK_STATUS_COLOR.finalizado}">${counts.finalizado} finalizada${counts.finalizado===1?'':'s'}</span>`);
+  if(contentItems.length) parts.push(`<span class="cal-summary-chip" style="background:#5b4e9e22;color:#5b4e9e">${contentItems.length} contenido${contentItems.length===1?'':'s'}</span>`);
+  el.innerHTML = parts.length ? parts.join('') : '<span class="cal-summary-empty">Sin tareas ni contenido cargado para este día.</span>';
+}
+
+function refreshOpenCalDayModal(){
+  if(document.getElementById('cal-day-modal').classList.contains('open') && calModalDateKey){
+    renderCalDaySummary();
+    renderCalDayTeamTasks();
+  }
+}
+
+async function deleteTeamTaskFromCalendar(id){
+  teamTasks = teamTasks.filter(x=>x.id!==id);
+  renderLists();
+  renderChecklist();
+  refreshCalendars();
+  refreshOpenCalDayModal();
+  await saveTeamTasks();
+}
+
 function renderCalDayTeamTasks(){
   const el = document.getElementById('cal-day-team-tasks');
   if(!el) return;
@@ -2869,18 +2927,43 @@ function renderCalDayTeamTasks(){
     return;
   }
   el.innerHTML = `<div class="cal-day-team-tasks-label">Tareas del equipo ese día</div>` + tasks.map(t=>{
-    const done = isTaskDoneForDate(t, calModalDateKey);
     const who = PEOPLE[t.person] || t.person;
     const icon = taskRepeatType(t)!=='none' ? '🔁' : '📌';
     const catColor = TASK_CATEGORY_COLOR[t.category] || TASK_CATEGORY_COLOR.otro;
     const catLabel = TASK_CATEGORIES[t.category] || TASK_CATEGORIES.otro;
-    return `<div class="cal-day-item-row cal-day-team-row">
+    return `<div class="cal-day-item-row cal-day-team-row" data-id="${t.id}">
       <span class="cal-item-dot" style="background:${catColor}"></span>
       <div class="cal-day-item-main">
-        <div class="cal-day-item-title ${done?'done':''}">${icon} ${escapeHtml(who)}: ${escapeHtml(t.text)} <span style="color:${catColor};font-size:10px;font-weight:600;">(${escapeHtml(catLabel)})</span></div>
+        <div class="cal-day-item-title">${icon} ${escapeHtml(who)}: ${escapeHtml(t.text)} <span style="color:${catColor};font-size:10px;font-weight:600;">(${escapeHtml(catLabel)})</span></div>
+        <div class="cal-day-item-meta">
+          <select class="cal-team-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, calModalDateKey)}</select>
+        </div>
+      </div>
+      <div class="cal-day-team-actions">
+        <button class="cal-day-team-edit" data-id="${t.id}" title="Editar">✎</button>
+        <button class="cal-day-team-del" data-id="${t.id}" title="Eliminar">✕</button>
       </div>
     </div>`;
-  }).join('') + `<div class="cal-day-team-tasks-hint">Se gestionan desde "Control equipo" / "Mis tareas"</div>`;
+  }).join('') + `<div class="cal-day-team-tasks-hint">También podés gestionarlas desde "Control equipo" / "Mis tareas"</div>`;
+
+  el.querySelectorAll('.cal-team-status-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const t = teamTasks.find(x=>x.id===sel.dataset.id);
+      if(!t) return;
+      setTaskStatusForDate(t, calModalDateKey, sel.value);
+      renderLists();
+      renderChecklist();
+      refreshCalendars();
+      renderCalDaySummary();
+      await saveTeamTasks();
+    });
+  });
+  el.querySelectorAll('.cal-day-team-edit').forEach(btn=>{
+    btn.addEventListener('click', ()=>openEditTeamTask(btn.dataset.id));
+  });
+  el.querySelectorAll('.cal-day-team-del').forEach(btn=>{
+    btn.addEventListener('click', ()=>deleteTeamTaskFromCalendar(btn.dataset.id));
+  });
 }
 
 function renderCalDayItemsList(){
@@ -2921,6 +3004,7 @@ function renderCalDayItemsList(){
       contentCalendar[calModalDateKey] = (contentCalendar[calModalDateKey]||[]).filter(x=>x.id!==btn.dataset.id);
       await saveCalendarDay(calModalDateKey);
       renderCalDayItemsList();
+      renderCalDaySummary();
       renderCalendarMonth('admin'); renderCalendarMonth('emp');
     });
   });
@@ -2935,6 +3019,7 @@ function openCalDayModal(dStr, scope){
   document.getElementById('cal-new-type').innerHTML = calSelectOptionsHtml(CAL_TYPES,'reel');
   document.getElementById('cal-new-status').innerHTML = calSelectOptionsHtml(CAL_STATUS,'idea');
   document.getElementById('cal-new-title').value = '';
+  renderCalDaySummary();
   renderCalDayTeamTasks();
   renderCalDayItemsList();
   document.getElementById('cal-day-modal').classList.add('open');
@@ -2955,6 +3040,7 @@ async function addCalItem(){
   await saveCalendarDay(calModalDateKey);
   document.getElementById('cal-new-title').value = '';
   renderCalDayItemsList();
+  renderCalDaySummary();
   renderCalendarMonth('admin');
   renderCalendarMonth('emp');
 }
