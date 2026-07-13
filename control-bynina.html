@@ -465,22 +465,38 @@
     font-size:11px;color:var(--ink-soft);
   }
   .cal-legend-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto;}
-  .cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px;}
+  .cal-calendar-wrap{
+    border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:20px;
+    background:var(--card);
+  }
+  .cal-dow-row{
+    display:grid;grid-template-columns:repeat(7,1fr);
+    background:#faf9f6;border-bottom:1px solid var(--line);
+  }
   .cal-dow{
-    text-align:center;font-family:'Poppins',sans-serif;font-size:11px;font-weight:600;
-    color:var(--ink-soft);
+    text-align:center;font-family:'Poppins',sans-serif;font-size:10px;font-weight:700;
+    color:var(--ink-soft);padding:9px 2px;text-transform:uppercase;letter-spacing:.03em;
   }
-  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:20px;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);}
   .cal-day{
-    background:var(--card);border:1px solid var(--line);border-radius:8px;
-    padding:4px;min-height:58px;cursor:pointer;overflow:hidden;
+    background:var(--card);border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+    padding:5px 4px;min-height:104px;cursor:pointer;overflow:hidden;
   }
-  .cal-day.other-month{opacity:.35;}
-  .cal-day.today{border:2px solid var(--purple);}
-  .cal-day-num{font-family:'Poppins',sans-serif;font-size:11px;font-weight:600;color:var(--ink);}
+  .cal-day:nth-child(7n){border-right:none;}
+  .cal-day.other-month{opacity:.4;background:#faf9f6;}
+  .cal-day.today{background:#f3effa;}
+  .cal-day-num{
+    font-family:'Poppins',sans-serif;font-size:11px;font-weight:600;color:var(--ink);
+    margin-bottom:3px;
+  }
+  .cal-day.today .cal-day-num{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:20px;height:20px;border-radius:50%;background:var(--purple);color:#fff;
+  }
   .cal-item-chip{
-    font-family:'Inter',sans-serif;font-size:9px;color:var(--ink);
-    display:flex;align-items:center;gap:3px;margin-top:2px;
+    font-family:'Inter',sans-serif;font-size:10px;color:var(--ink);
+    display:flex;align-items:center;gap:4px;margin-top:2px;padding:1px 4px;
+    border-radius:4px;background:#f2f1ec;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   }
   .cal-item-dot{width:6px;height:6px;border-radius:50%;flex:0 0 auto;}
@@ -502,6 +518,10 @@
   }
   .cal-item-chip.cal-task-chip{font-weight:600;}
   .cal-item-chip.cal-task-chip.done{opacity:.45;text-decoration:line-through;}
+  .cal-item-chip.cal-task-chip.cal-task-shared{
+    background:#ede9fe;
+  }
+  .cal-day-item-row.cal-task-shared{background:#ede9fe;}
   .cal-day-team-tasks-label{
     font-family:'Poppins',sans-serif;font-size:12px;font-weight:600;
     color:var(--ink-soft);margin-bottom:8px;
@@ -917,7 +937,7 @@
     </div>
     <label class="team-involve-check">
       <input type="checkbox" id="team-involve-me">
-      Estoy involucrado — agregar también a mi día
+      Estoy involucrado — me figura en Mi Día y en el Calendario como "Responsable: [persona]"
     </label>
   </div>
 
@@ -993,8 +1013,10 @@
     <div class="capture-label">Filtrar tareas por tema</div>
     <div class="filters" id="cal-category-filter"></div>
     <div class="cal-legend" id="cal-legend"></div>
-    <div class="cal-dow-row" id="cal-dow-row"></div>
-    <div class="cal-grid" id="cal-grid"></div>
+    <div class="cal-calendar-wrap">
+      <div class="cal-dow-row" id="cal-dow-row"></div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
   </div>
 
   <div class="status-bar" id="status-bar">cargando...</div>
@@ -1045,8 +1067,10 @@
       <button id="ecal-next-month">›</button>
     </div>
     <div class="cal-legend" id="ecal-legend"></div>
-    <div class="cal-dow-row" id="ecal-dow-row"></div>
-    <div class="cal-grid" id="ecal-grid"></div>
+    <div class="cal-calendar-wrap">
+      <div class="cal-dow-row" id="ecal-dow-row"></div>
+      <div class="cal-grid" id="ecal-grid"></div>
+    </div>
   </div>
 
   <div class="status-bar" id="employee-status-bar">cargando...</div>
@@ -1082,6 +1106,12 @@
     <div class="modal-field">
       <label for="edit-task-repeat">Repetición</label>
       <select id="edit-task-repeat"></select>
+    </div>
+    <div class="modal-field" id="edit-task-shared-field">
+      <label class="check-row" style="margin:0;">
+        <input type="checkbox" id="edit-task-shared">
+        Compartida conmigo (me figura en Mi Día y en el Calendario como "Responsable: [persona]")
+      </label>
     </div>
     <div class="modal-footer">
       <button class="modal-cancel-btn" id="edit-task-cancel">Cancelar</button>
@@ -1887,6 +1917,7 @@ function teamTicketHtml(t){
         <div class="ticket-meta">
           <span class="tag ${t.person}">${PEOPLE[t.person] || t.person}</span>
           ${categoryTagHtml(t)}
+          ${t.sharedWithMe?'<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Compartida conmigo</span>':''}
           <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, todayKey())}</select>
           <span class="ticket-time">${fmtTime(t.ts)}</span>
           ${timeLabel}
@@ -2127,6 +2158,8 @@ async function addTeamTask(){
   if(involveMe){
     const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTasks[0].id, repeat==='daily');
     newTasks[0].linkedPersonalTaskId = linkedId;
+    newTasks[0].sharedWithMe = true;
+    refreshCalendars();
     await saveTeamTasks();
     setStatus('guardado y agregado a tu día');
   }
@@ -2232,7 +2265,9 @@ function openEditTeamTask(id){
   document.getElementById('edit-task-text').value = t.text;
   document.getElementById('edit-task-status').innerHTML = taskStatusSelectHtml(t, editingTeamTaskDateStr);
   document.getElementById('edit-task-repeat').innerHTML = repeatSelectOptionsHtml(taskRepeatType(t));
+  document.getElementById('edit-task-shared').checked = !!t.sharedWithMe;
   document.getElementById('edit-task-person-field').style.display = employeePersona ? 'none' : '';
+  document.getElementById('edit-task-shared-field').style.display = employeePersona ? 'none' : '';
   document.getElementById('edit-task-modal').classList.add('open');
 }
 
@@ -2254,6 +2289,19 @@ async function saveEditTeamTask(){
   t.repeat = document.getElementById('edit-task-repeat').value;
   delete t.repeatDaily;
   setTaskStatusForDate(t, editingTeamTaskDateStr || todayKey(), document.getElementById('edit-task-status').value);
+  if(!employeePersona){
+    const sharedNow = document.getElementById('edit-task-shared').checked;
+    if(sharedNow && !t.sharedWithMe){
+      const linkedId = await addToMyTasksForDate(t.dueDate || todayKey(), t.time || '', t.text, t.id, taskRepeatType(t)==='daily');
+      t.linkedPersonalTaskId = linkedId;
+    } else if(!sharedNow && t.sharedWithMe && t.linkedPersonalTaskId){
+      personalTasks = personalTasks.filter(p=>p.id!==t.linkedPersonalTaskId);
+      renderPersonalTasks();
+      await savePersonalTasks();
+      delete t.linkedPersonalTaskId;
+    }
+    t.sharedWithMe = sharedNow;
+  }
   closeEditTeamTask();
   if(employeePersona){
     renderEmployeeView();
@@ -2812,7 +2860,7 @@ function getTeamTasksForDate(dStr, scope){
     tasks = tasks.filter(t => t.person === employeePersona || t.person === 'general');
   }
   if(scope === 'admin' && calAdminFilterPerson !== 'todos'){
-    tasks = tasks.filter(t => t.person === calAdminFilterPerson);
+    tasks = tasks.filter(t => t.person === calAdminFilterPerson || t.sharedWithMe);
   }
   if(scope === 'admin' && calAdminFilterCategory !== 'todos'){
     tasks = tasks.filter(t => (t.category || 'otro') === calAdminFilterCategory);
@@ -2853,11 +2901,12 @@ function renderCalendarMonth(scope){
 
     const taskChips = teamItems.map(t=>{
       const done = isTaskDoneForDate(t, dStr);
-      const showWho = scope==='admin' && calAdminFilterPerson === 'todos' && PEOPLE[t.person];
-      const who = showWho ? PEOPLE[t.person]+': ' : '';
-      const icon = taskRepeatType(t)!=='none' ? '🔁' : '📌';
+      const isShared = scope==='admin' && !!t.sharedWithMe;
+      const showWho = scope==='admin' && (calAdminFilterPerson === 'todos' || isShared) && PEOPLE[t.person];
+      const who = isShared ? `Responsable ${PEOPLE[t.person]||t.person}: ` : (showWho ? PEOPLE[t.person]+': ' : '');
+      const icon = isShared ? '👁️' : (taskRepeatType(t)!=='none' ? '🔁' : '📌');
       const catColor = TASK_CATEGORY_COLOR[t.category] || TASK_CATEGORY_COLOR.otro;
-      return `<div class="cal-item-chip cal-task-chip ${done?'done':''}"><span class="cal-item-dot" style="background:${catColor}"></span>${icon} ${escapeHtml(who)}${escapeHtml(t.text)}</div>`;
+      return `<div class="cal-item-chip cal-task-chip ${done?'done':''} ${isShared?'cal-task-shared':''}"><span class="cal-item-dot" style="background:${catColor}"></span>${icon} ${escapeHtml(who)}${escapeHtml(t.text)}</div>`;
     });
     const contentChips = contentItems.map(it=>
       `<div class="cal-item-chip"><span class="cal-item-dot" style="background:${CAL_STATUS_COLOR[it.status]||'#847d70'}"></span>${escapeHtml(it.title)}</div>`
@@ -2928,13 +2977,15 @@ function renderCalDayTeamTasks(){
   }
   el.innerHTML = `<div class="cal-day-team-tasks-label">Tareas del equipo ese día</div>` + tasks.map(t=>{
     const who = PEOPLE[t.person] || t.person;
-    const icon = taskRepeatType(t)!=='none' ? '🔁' : '📌';
+    const isShared = !!t.sharedWithMe;
+    const icon = isShared ? '👁️' : (taskRepeatType(t)!=='none' ? '🔁' : '📌');
+    const label = isShared ? `Responsable: ${escapeHtml(who)}` : escapeHtml(who);
     const catColor = TASK_CATEGORY_COLOR[t.category] || TASK_CATEGORY_COLOR.otro;
     const catLabel = TASK_CATEGORIES[t.category] || TASK_CATEGORIES.otro;
-    return `<div class="cal-day-item-row cal-day-team-row" data-id="${t.id}">
+    return `<div class="cal-day-item-row cal-day-team-row ${isShared?'cal-task-shared':''}" data-id="${t.id}">
       <span class="cal-item-dot" style="background:${catColor}"></span>
       <div class="cal-day-item-main">
-        <div class="cal-day-item-title">${icon} ${escapeHtml(who)}: ${escapeHtml(t.text)} <span style="color:${catColor};font-size:10px;font-weight:600;">(${escapeHtml(catLabel)})</span></div>
+        <div class="cal-day-item-title">${icon} ${label}: ${escapeHtml(t.text)} <span style="color:${catColor};font-size:10px;font-weight:600;">(${escapeHtml(catLabel)})</span></div>
         <div class="cal-day-item-meta">
           <select class="cal-team-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, calModalDateKey)}</select>
         </div>
