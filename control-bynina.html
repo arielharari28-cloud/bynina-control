@@ -258,6 +258,7 @@
     align-items:flex-start;
   }
   .ticket.resolved{opacity:0.6;}
+  .ticket.shared-ticket{background:#faf8ff;}
   .ticket-check{
     flex:0 0 auto;
     width:22px;
@@ -2474,12 +2475,20 @@ function personalTaskHtml(t){
     (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   const postponeBtn = t.repeatDaily ? '' : `<button class="edit-btn ptask-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
+  let responsableLabel = '';
+  if(t.linkedTeamTaskId){
+    const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
+    if(tt && tt.person && tt.person!=='general'){
+      responsableLabel = `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(PEOPLE[tt.person]||tt.person)}</span>`;
+    }
+  }
   return `
-    <div class="ticket ${done?'resolved':''}">
+    <div class="ticket ${done?'resolved':''} ${responsableLabel?'shared-ticket':''}">
       <div class="ticket-check ptask-check" data-id="${t.id}">${done?'✓':''}</div>
       <div class="ticket-body">
         <div class="ticket-meta">
           <span class="tag ${t.area}">${AREAS[t.area] || t.area}</span>
+          ${responsableLabel}
           ${timeLabel}
           ${dueLabel}
         </div>
