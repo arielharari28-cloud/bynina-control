@@ -1634,6 +1634,13 @@ function renderFilters(){
   });
 }
 
+function effectiveDueKey(t){
+  // Para tareas que se repiten, lo relevante para ordenar es "hoy" (siempre están vigentes),
+  // no la fecha ancla original en la que se crearon.
+  if(taskRepeatType(t) !== 'none') return todayKey();
+  return t.dueDate || '';
+}
+
 function renderLists(){
   const pendingEl = document.getElementById('pending-list');
   const resolvedEl = document.getElementById('resolved-list');
@@ -1641,13 +1648,14 @@ function renderLists(){
   const filtered = activeFilter==='todos' ? teamTasks : teamTasks.filter(t=>t.person===activeFilter);
   const todayStr = todayKey();
   const pending = filtered.filter(t=>!isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
-    if(a.dueDate && b.dueDate){
-      const cmp = a.dueDate.localeCompare(b.dueDate);
+    const da = effectiveDueKey(a), db = effectiveDueKey(b);
+    if(da && db){
+      const cmp = da.localeCompare(db);
       if(cmp !== 0) return cmp;
       return (a.time||'').localeCompare(b.time||'');
     }
-    if(a.dueDate) return -1;
-    if(b.dueDate) return 1;
+    if(da) return -1;
+    if(db) return 1;
     return b.ts - a.ts;
   });
   const resolved = filtered.filter(t=>isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
@@ -2021,13 +2029,14 @@ function renderEmployeeView(){
   const mine = teamTasks.filter(t=>t.person===employeePersona);
   const todayStr = todayKey();
   const pending = mine.filter(t=>!isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
-    if(a.dueDate && b.dueDate){
-      const cmp = a.dueDate.localeCompare(b.dueDate);
+    const da = effectiveDueKey(a), db = effectiveDueKey(b);
+    if(da && db){
+      const cmp = da.localeCompare(db);
       if(cmp !== 0) return cmp;
       return (a.time||'').localeCompare(b.time||'');
     }
-    if(a.dueDate) return -1;
-    if(b.dueDate) return 1;
+    if(da) return -1;
+    if(db) return 1;
     return b.ts - a.ts;
   });
   const resolved = mine.filter(t=>isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
@@ -2869,7 +2878,7 @@ function getTeamTasksForDate(dStr, scope){
     tasks = tasks.filter(t => t.person === employeePersona || t.person === 'general');
   }
   if(scope === 'admin' && calAdminFilterPerson !== 'todos'){
-    tasks = tasks.filter(t => t.person === calAdminFilterPerson || t.sharedWithMe);
+    tasks = tasks.filter(t => t.person === calAdminFilterPerson);
   }
   if(scope === 'admin' && calAdminFilterCategory !== 'todos'){
     tasks = tasks.filter(t => (t.category || 'otro') === calAdminFilterCategory);
