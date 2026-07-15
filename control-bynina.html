@@ -2313,11 +2313,19 @@ async function saveEditTeamTask(){
   t.text = newText;
   t.person = employeePersona ? employeePersona : document.getElementById('edit-task-person').value;
   t.category = document.getElementById('edit-task-category').value;
-  t.dueDate = document.getElementById('edit-task-due').value || '';
+  const newDueDate = document.getElementById('edit-task-due').value || '';
+  const dueDateChanged = newDueDate !== (t.dueDate || '');
+  t.dueDate = newDueDate;
   t.time = document.getElementById('edit-task-time').value || '';
   t.repeat = document.getElementById('edit-task-repeat').value;
   delete t.repeatDaily;
-  setTaskStatusForDate(t, editingTeamTaskDateStr || todayKey(), document.getElementById('edit-task-status').value);
+  if(dueDateChanged && taskRepeatType(t) !== 'none'){
+    // Cambió el ancla de la repetición: el historial de "finalizado" viejo ya no aplica,
+    // si no se limpia puede bloquear justo la fecha que se acaba de elegir.
+    t.statusDates = {};
+    t.doneDates = {};
+  }
+  setTaskStatusForDate(t, dueDateChanged ? newDueDate : (editingTeamTaskDateStr || todayKey()), document.getElementById('edit-task-status').value);
   if(!employeePersona){
     const sharedNow = document.getElementById('edit-task-shared').checked;
     if(sharedNow && !t.sharedWithMe){
