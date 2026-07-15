@@ -2297,6 +2297,8 @@ async function addEmployeeTask(){
   if(involveBoss){
     const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTeamTask.id, repeat==='daily');
     newTeamTask.linkedPersonalTaskId = linkedId;
+    newTeamTask.sharedWithMe = true;
+    refreshCalendars();
     await saveTeamTasks();
   }
   involveEl.checked = false;
