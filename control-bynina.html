@@ -1500,7 +1500,7 @@ function renderChecklist(){
     sel.addEventListener('change', async ()=>{
       const t = teamTasks.find(x=>x.id===sel.dataset.id);
       if(!t) return;
-      setTaskStatusForDate(t, todayKey(), sel.value);
+      setTaskStatusForDate(t, nextRecurrence(t), sel.value);
       renderChecklist();
       renderLists();
       refreshCalendars();
@@ -1634,10 +1634,27 @@ function renderFilters(){
   });
 }
 
+// Para una tarea que se repite, busca la próxima fecha (desde hoy en adelante) en la que
+// "cae" según su frecuencia y todavía no está marcada como finalizada para ese día.
+// Al marcarla finalizada, la próxima vez que se calcule salta sola a la siguiente ocurrencia.
+function nextRecurrence(t, fromStr){
+  fromStr = fromStr || todayKey();
+  if(taskRepeatType(t) === 'none') return t.dueDate || fromStr;
+  let d = new Date(fromStr+'T00:00:00');
+  for(let i=0;i<400;i++){
+    const key = dateKey(d);
+    if(taskRecursOnDate(t, key) && getTaskStatusForDate(t, key) !== 'finalizado'){
+      return key;
+    }
+    d.setDate(d.getDate()+1);
+  }
+  return fromStr;
+}
+
 function effectiveDueKey(t){
-  // Para tareas que se repiten, lo relevante para ordenar es "hoy" (siempre están vigentes),
-  // no la fecha ancla original en la que se crearon.
-  if(taskRepeatType(t) !== 'none') return todayKey();
+  // Para tareas que se repiten, lo relevante para ordenar es su próxima ocurrencia real
+  // (no la fecha ancla original en la que se crearon, ni "hoy" fijo).
+  if(taskRepeatType(t) !== 'none') return nextRecurrence(t);
   return t.dueDate || '';
 }
 
@@ -1681,7 +1698,7 @@ function renderLists(){
     sel.addEventListener('change', async ()=>{
       const t = teamTasks.find(x=>x.id===sel.dataset.id);
       if(!t) return;
-      setTaskStatusForDate(t, todayKey(), sel.value);
+      setTaskStatusForDate(t, nextRecurrence(t), sel.value);
       renderLists();
       renderChecklist();
       refreshCalendars();
@@ -1706,7 +1723,7 @@ function refreshCalendars(){
 async function toggleTeamTaskResolved(id){
   const t = teamTasks.find(x=>x.id===id);
   if(!t) return;
-  const today = todayKey();
+  const today = nextRecurrence(t);
   toggleTaskDoneForDate(t, today);
   if(employeePersona){
     renderEmployeeView();
@@ -1908,7 +1925,9 @@ function categoryTagHtml(t){
 function repeatBadgeHtml(t){
   const type = taskRepeatType(t);
   if(type === 'none') return null;
-  return `<span class="due-badge repeat-badge">🔁 ${REPEAT_LABELS[type].toLowerCase()}</span>`;
+  const next = nextRecurrence(t);
+  const overdue = next < todayKey();
+  return `<span class="due-badge repeat-badge">🔁 ${REPEAT_LABELS[type].toLowerCase()}</span><span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(next)}</span>`;
 }
 
 function teamTicketHtml(t){
@@ -1927,7 +1946,7 @@ function teamTicketHtml(t){
           <span class="tag ${t.person}">${PEOPLE[t.person] || t.person}</span>
           ${categoryTagHtml(t)}
           ${t.sharedWithMe?'<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Compartida conmigo</span>':''}
-          <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, todayKey())}</select>
+          <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, nextRecurrence(t))}</select>
           <span class="ticket-time">${fmtTime(t.ts)}</span>
           ${timeLabel}
           ${dueLabel}
@@ -1952,7 +1971,7 @@ function teamTaskRowHtml(t){
   return `
     <div class="check-item check-team-item">
       <div class="ticket-check team-check" data-id="${t.id}">${done?'✓':''}</div>
-      <label class="check-team-label">${categoryTagHtml(t)} <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, todayKey())}</select> ${escapeHtml(t.text)} ${timeLabel} ${dueLabel}</label>
+      <label class="check-team-label">${categoryTagHtml(t)} <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, nextRecurrence(t))}</select> ${escapeHtml(t.text)} ${timeLabel} ${dueLabel}</label>
       ${postponeBtn}
       <button class="edit-btn team-edit" data-id="${t.id}" title="Editar">✎</button>
       <button class="del-btn team-del" data-id="${t.id}" title="Eliminar">×</button>
@@ -1975,7 +1994,7 @@ function employeeTicketHtml(t){
       <div class="ticket-body">
         <div class="ticket-meta">
           ${categoryTagHtml(t)}
-          <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, todayKey())}</select>
+          <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, nextRecurrence(t))}</select>
           ${timeLabel}
           ${dueLabel}
         </div>
@@ -2061,7 +2080,7 @@ function renderEmployeeView(){
     sel.addEventListener('change', async ()=>{
       const t = teamTasks.find(x=>x.id===sel.dataset.id);
       if(!t) return;
-      setTaskStatusForDate(t, todayKey(), sel.value);
+      setTaskStatusForDate(t, nextRecurrence(t), sel.value);
       renderEmployeeView();
       refreshCalendars();
       await saveTeamTasks();
@@ -2266,7 +2285,7 @@ function openEditTeamTask(id){
   if(!t) return;
   editingTeamTaskId = id;
   const calOpen = document.getElementById('cal-day-modal').classList.contains('open');
-  editingTeamTaskDateStr = (calOpen && calModalDateKey) ? calModalDateKey : todayKey();
+  editingTeamTaskDateStr = (calOpen && calModalDateKey) ? calModalDateKey : nextRecurrence(t);
   populateEditPersonSelect();
   document.getElementById('edit-task-person').value = t.person;
   document.getElementById('edit-task-category').innerHTML = categorySelectOptionsHtml(t.category || 'otro');
