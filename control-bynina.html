@@ -2289,7 +2289,7 @@ function openEditTeamTask(id){
   populateEditPersonSelect();
   document.getElementById('edit-task-person').value = t.person;
   document.getElementById('edit-task-category').innerHTML = categorySelectOptionsHtml(t.category || 'otro');
-  document.getElementById('edit-task-due').value = t.dueDate || '';
+  document.getElementById('edit-task-due').value = taskRepeatType(t)!=='none' ? editingTeamTaskDateStr : (t.dueDate || '');
   document.getElementById('edit-task-time').value = t.time || '';
   document.getElementById('edit-task-text').value = t.text;
   document.getElementById('edit-task-status').innerHTML = taskStatusSelectHtml(t, editingTeamTaskDateStr);
