@@ -1444,7 +1444,7 @@ function renderChecklist(){
     const done = sec.items.filter(it => checklistState[it.id]).length;
     const progressClass = done === 0 ? 'zero' : '';
     const personKey = Object.keys(PEOPLE).find(k => PEOPLE[k] === sec.person);
-    const pendingTeam = teamTasks.filter(t => !isTaskDoneForDate(t, todayKey()) && t.person === personKey)
+    const pendingTeam = teamTasks.filter(t => (taskRepeatType(t)!=='none' || !isTaskDoneForDate(t, todayKey())) && t.person === personKey)
       .sort((a,b)=>b.ts-a.ts);
     const teamBlock = pendingTeam.length ? `
       <div class="check-team-tasks">
@@ -1664,7 +1664,7 @@ function renderLists(){
 
   const filtered = activeFilter==='todos' ? teamTasks : teamTasks.filter(t=>t.person===activeFilter);
   const todayStr = todayKey();
-  const pending = filtered.filter(t=>!isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
+  const pending = filtered.filter(t=>taskRepeatType(t)!=='none' || !isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
     const da = effectiveDueKey(a), db = effectiveDueKey(b);
     if(da && db){
       const cmp = da.localeCompare(db);
@@ -1675,7 +1675,7 @@ function renderLists(){
     if(db) return 1;
     return b.ts - a.ts;
   });
-  const resolved = filtered.filter(t=>isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
+  const resolved = filtered.filter(t=>taskRepeatType(t)==='none' && isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
 
   pendingEl.innerHTML = pending.length ? pending.map(teamTicketHtml).join('') :
     '<div class="empty">No hay pendientes acá. Buen momento para respirar.</div>';
@@ -1931,8 +1931,8 @@ function repeatBadgeHtml(t){
 }
 
 function teamTicketHtml(t){
-  const done = isTaskDoneForDate(t, todayKey());
   const repType = taskRepeatType(t);
+  const done = repType!=='none' ? false : isTaskDoneForDate(t, todayKey());
   const overdue = repType==='none' && isOverdue(t.dueDate, done);
   const dueLabel = repType!=='none' ? repeatBadgeHtml(t) :
     (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
@@ -1961,8 +1961,8 @@ function teamTicketHtml(t){
 }
 
 function teamTaskRowHtml(t){
-  const done = isTaskDoneForDate(t, todayKey());
   const repType = taskRepeatType(t);
+  const done = repType!=='none' ? false : isTaskDoneForDate(t, todayKey());
   const overdue = repType==='none' && isOverdue(t.dueDate, done);
   const dueLabel = repType!=='none' ? repeatBadgeHtml(t) :
     (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
@@ -1981,8 +1981,8 @@ function teamTaskRowHtml(t){
 
 /* ===== Vista de empleado: solo sus tareas, sin editar/eliminar ===== */
 function employeeTicketHtml(t){
-  const done = isTaskDoneForDate(t, todayKey());
   const repType = taskRepeatType(t);
+  const done = repType!=='none' ? false : isTaskDoneForDate(t, todayKey());
   const overdue = repType==='none' && isOverdue(t.dueDate, done);
   const dueLabel = repType!=='none' ? repeatBadgeHtml(t) :
     (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
@@ -2047,7 +2047,7 @@ function renderEmployeeView(){
 
   const mine = teamTasks.filter(t=>t.person===employeePersona);
   const todayStr = todayKey();
-  const pending = mine.filter(t=>!isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
+  const pending = mine.filter(t=>taskRepeatType(t)!=='none' || !isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
     const da = effectiveDueKey(a), db = effectiveDueKey(b);
     if(da && db){
       const cmp = da.localeCompare(db);
@@ -2058,7 +2058,7 @@ function renderEmployeeView(){
     if(db) return 1;
     return b.ts - a.ts;
   });
-  const resolved = mine.filter(t=>isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
+  const resolved = mine.filter(t=>taskRepeatType(t)==='none' && isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
 
   const pendingEl = document.getElementById('employee-pending-list');
   const resolvedEl = document.getElementById('employee-resolved-list');
