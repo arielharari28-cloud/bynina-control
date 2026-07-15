@@ -1493,6 +1493,9 @@ function renderChecklist(){
   el.querySelectorAll('.team-postpone').forEach(btn=>{
     btn.addEventListener('click', ()=>postponeTeamTask(btn.dataset.id));
   });
+  el.querySelectorAll('.task-undo').forEach(btn=>{
+    btn.addEventListener('click', ()=>undoTeamTaskCompletion(btn.dataset.id));
+  });
   el.querySelectorAll('.team-edit').forEach(btn=>{
     btn.addEventListener('click', ()=>openEditTeamTask(btn.dataset.id));
   });
@@ -1658,6 +1661,32 @@ function effectiveDueKey(t){
   return t.dueDate || '';
 }
 
+// Busca la fecha marcada como finalizada más reciente de una tarea recurrente, para poder deshacerla.
+function lastCompletedOccurrence(t){
+  if(!t.statusDates) return null;
+  const doneDates = Object.keys(t.statusDates).filter(d => t.statusDates[d] === 'finalizado');
+  if(!doneDates.length) return null;
+  doneDates.sort();
+  return doneDates[doneDates.length - 1];
+}
+
+async function undoTeamTaskCompletion(id){
+  const t = teamTasks.find(x=>x.id===id);
+  if(!t) return;
+  const last = lastCompletedOccurrence(t);
+  if(!last) return;
+  setTaskStatusForDate(t, last, 'pendiente');
+  if(employeePersona){
+    renderEmployeeView();
+  } else {
+    renderLists();
+    renderChecklist();
+  }
+  refreshCalendars();
+  refreshOpenCalDayModal();
+  await saveTeamTasks();
+}
+
 function renderLists(){
   const pendingEl = document.getElementById('pending-list');
   const resolvedEl = document.getElementById('resolved-list');
@@ -1693,6 +1722,9 @@ function renderLists(){
   });
   document.querySelectorAll('#pending-list .team-postpone, #resolved-list .team-postpone').forEach(btn=>{
     btn.addEventListener('click', ()=>postponeTeamTask(btn.dataset.id));
+  });
+  document.querySelectorAll('#pending-list .task-undo, #resolved-list .task-undo').forEach(btn=>{
+    btn.addEventListener('click', ()=>undoTeamTaskCompletion(btn.dataset.id));
   });
   document.querySelectorAll('#pending-list .task-status-select, #resolved-list .task-status-select').forEach(sel=>{
     sel.addEventListener('change', async ()=>{
@@ -1938,6 +1970,7 @@ function teamTicketHtml(t){
     (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn team-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
+  const undoBtn = (repType!=='none' && lastCompletedOccurrence(t)) ? `<button class="edit-btn task-undo" data-id="${t.id}" title="Deshacer última finalización">↩</button>` : '';
   return `
     <div class="ticket ${done?'resolved':''}">
       <div class="ticket-check team-check" data-id="${t.id}">${done?'✓':''}</div>
@@ -1953,6 +1986,7 @@ function teamTicketHtml(t){
         </div>
         <div class="ticket-text">${escapeHtml(t.text)}</div>
       </div>
+      ${undoBtn}
       ${postponeBtn}
       <button class="edit-btn team-edit" data-id="${t.id}" title="Editar">✎</button>
       <button class="del-btn team-del" data-id="${t.id}" title="Eliminar">×</button>
@@ -1968,10 +2002,12 @@ function teamTaskRowHtml(t){
     (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn team-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
+  const undoBtn = (repType!=='none' && lastCompletedOccurrence(t)) ? `<button class="edit-btn task-undo" data-id="${t.id}" title="Deshacer última finalización">↩</button>` : '';
   return `
     <div class="check-item check-team-item">
       <div class="ticket-check team-check" data-id="${t.id}">${done?'✓':''}</div>
       <label class="check-team-label">${categoryTagHtml(t)} <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, nextRecurrence(t))}</select> ${escapeHtml(t.text)} ${timeLabel} ${dueLabel}</label>
+      ${undoBtn}
       ${postponeBtn}
       <button class="edit-btn team-edit" data-id="${t.id}" title="Editar">✎</button>
       <button class="del-btn team-del" data-id="${t.id}" title="Eliminar">×</button>
@@ -1988,6 +2024,7 @@ function employeeTicketHtml(t){
     (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn employee-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
+  const undoBtn = (repType!=='none' && lastCompletedOccurrence(t)) ? `<button class="edit-btn task-undo" data-id="${t.id}" title="Deshacer última finalización">↩</button>` : '';
   return `
     <div class="ticket ${done?'resolved':''}">
       <div class="ticket-check employee-check" data-id="${t.id}">${done?'✓':''}</div>
@@ -2000,6 +2037,7 @@ function employeeTicketHtml(t){
         </div>
         <div class="ticket-text">${escapeHtml(t.text)}</div>
       </div>
+      ${undoBtn}
       ${postponeBtn}
       <button class="edit-btn employee-edit" data-id="${t.id}" title="Editar">✎</button>
     </div>
@@ -2072,6 +2110,9 @@ function renderEmployeeView(){
   });
   document.querySelectorAll('#employee-pending-list .employee-postpone, #employee-resolved-list .employee-postpone').forEach(btn=>{
     btn.addEventListener('click', ()=>postponeTeamTask(btn.dataset.id));
+  });
+  document.querySelectorAll('#employee-pending-list .task-undo, #employee-resolved-list .task-undo').forEach(btn=>{
+    btn.addEventListener('click', ()=>undoTeamTaskCompletion(btn.dataset.id));
   });
   document.querySelectorAll('#employee-pending-list .employee-edit, #employee-resolved-list .employee-edit').forEach(btn=>{
     btn.addEventListener('click', ()=>openEditTeamTask(btn.dataset.id));
