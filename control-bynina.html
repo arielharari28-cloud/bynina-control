@@ -541,6 +541,14 @@
   .cal-add-form-row select{flex:1 1 100px;}
   .cal-add-form-row textarea{flex:1 1 100%;min-height:44px;}
 
+  .ptask-date-group{
+    font-family:'Poppins',sans-serif;font-size:12px;font-weight:700;
+    color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;
+    margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line);
+  }
+  .ptask-date-group:first-child{margin-top:0;}
+  .ptask-date-group-resolved{color:var(--green);}
+
   .empty{
     font-family:'Inter',sans-serif;
     font-size:13px;
@@ -2583,27 +2591,68 @@ function personalTaskHtml(t){
   `;
 }
 
+function personalTaskResponsibleName(t){
+  if(t.linkedTeamTaskId){
+    const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
+    if(tt && tt.person && tt.person!=='general') return PEOPLE[tt.person] || tt.person;
+  }
+  return null;
+}
+
+function personalTaskDateGroupLabel(dStr, todayStr){
+  if(dStr < todayStr) return `⏰ Atrasadas — ${fmtDue(dStr)}`;
+  if(dStr === todayStr) return `Hoy — ${fmtDue(dStr)}`;
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if(dStr === dateKey(tomorrow)) return `Mañana — ${fmtDue(dStr)}`;
+  return fmtDue(dStr);
+}
+
+function sortPersonalTaskGroup(arr){
+  return arr.slice().sort((a,b)=>{
+    const ra = personalTaskResponsibleName(a), rb = personalTaskResponsibleName(b);
+    if(!ra && rb) return -1;
+    if(ra && !rb) return 1;
+    if(ra && rb && ra !== rb) return ra.localeCompare(rb);
+    return (a.time||'').localeCompare(b.time||'');
+  });
+}
+
 function renderPersonalTasks(){
   const el = document.getElementById('task-list');
   const filtered = taskFilter==='todas' ? personalTasks : personalTasks.filter(t=>t.area===taskFilter);
   const todayStr = todayKey();
-  const pending = filtered.filter(t=>!isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
-    if(a.dueDate && b.dueDate){
-      const cmp = a.dueDate.localeCompare(b.dueDate);
-      if(cmp !== 0) return cmp;
-      return (a.time||'').localeCompare(b.time||'');
-    }
-    if(a.dueDate) return -1;
-    if(b.dueDate) return 1;
-    return b.ts - a.ts;
-  });
+  const pending = filtered.filter(t=>!isTaskDoneForDate(t, todayStr));
   const resolved = filtered.filter(t=>isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
   if(!filtered.length){
     el.innerHTML = '<div class="empty">No hay tareas acá.</div>';
     renderDaySummary();
     return;
   }
-  el.innerHTML = pending.map(personalTaskHtml).join('') + resolved.map(personalTaskHtml).join('');
+
+  const groups = {};
+  pending.forEach(t=>{
+    const key = t.dueDate || '';
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  });
+  const dateKeys = Object.keys(groups).filter(k=>k!=='').sort();
+  const noDateTasks = groups[''] || [];
+
+  let html = '';
+  dateKeys.forEach(dStr=>{
+    html += `<div class="ptask-date-group">${personalTaskDateGroupLabel(dStr, todayStr)}</div>`;
+    html += sortPersonalTaskGroup(groups[dStr]).map(personalTaskHtml).join('');
+  });
+  if(noDateTasks.length){
+    html += `<div class="ptask-date-group">Sin fecha fija</div>`;
+    html += sortPersonalTaskGroup(noDateTasks).map(personalTaskHtml).join('');
+  }
+  if(resolved.length){
+    html += `<div class="ptask-date-group ptask-date-group-resolved">Resueltas hoy</div>`;
+    html += resolved.map(personalTaskHtml).join('');
+  }
+  el.innerHTML = html;
   el.querySelectorAll('.ptask-check').forEach(btn=>{
     btn.addEventListener('click', ()=>togglePersonalTaskResolved(btn.dataset.id));
   });
