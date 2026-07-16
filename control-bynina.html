@@ -872,6 +872,7 @@
   }
   .summary-check:hover{border-color:var(--green);}
   .summary-row:last-child{border-bottom:none;}
+  .summary-row.summary-row-shared{background:#faf8ff;}
   .summary-row.done .summary-text{
     text-decoration:line-through;
     color:var(--ink-soft);
@@ -2834,24 +2835,34 @@ function renderDaySummary(){
   const pendingLabel = (t) => (t.dueDate && t.dueDate !== todayStr) ?
     `<span class="due-badge">pendiente</span>` : '';
 
-  let html = withTime.map(t => `
-    <div class="summary-row">
+  let html = withTime.map(t => {
+    const responsableName = personalTaskResponsibleName(t);
+    const responsableLabel = responsableName ? `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(responsableName)}</span>` : '';
+    return `
+    <div class="summary-row ${responsableName?'summary-row-shared':''}">
       <div class="summary-check" data-id="${t.id}"></div>
       <span class="summary-time">${t.time}</span>
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
+      ${responsableLabel}
       ${overdueLabel(t)}
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   if(noTime.length){
     html += `<div class="summary-subtitle">Sin horario fijo — arrastrá para reordenar</div>`;
-    html += noTime.map(t => `
-      <div class="summary-row draggable-row" draggable="true" data-id="${t.id}">
+    html += noTime.map(t => {
+      const responsableName = personalTaskResponsibleName(t);
+      const responsableLabel = responsableName ? `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(responsableName)}</span>` : '';
+      return `
+      <div class="summary-row draggable-row ${responsableName?'summary-row-shared':''}" draggable="true" data-id="${t.id}">
         <div class="summary-check" data-id="${t.id}"></div>
         <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
+        ${responsableLabel}
         ${pendingLabel(t)}
       </div>
-    `).join('');
+    `;
+    }).join('');
   }
   el.innerHTML = html;
 
