@@ -998,6 +998,9 @@
           <option value="otros">Otros clientes</option>
           <option value="personal">Personal</option>
         </select>
+        <select id="task-responsible">
+          <option value="">Responsabilidad mía</option>
+        </select>
         <input type="date" id="task-due-date">
         <input type="time" id="task-time-input">
         <textarea id="task-text-input" placeholder="Qué tenés que hacer..."></textarea>
@@ -1142,6 +1145,12 @@
         <option value="farb">Farb</option>
         <option value="otros">Otros clientes</option>
         <option value="personal">Personal</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label for="edit-ptask-responsible">Responsable</label>
+      <select id="edit-ptask-responsible">
+        <option value="">Responsabilidad mía</option>
       </select>
     </div>
     <div class="modal-field">
@@ -2592,7 +2601,16 @@ function personalTaskHtml(t){
   `;
 }
 
+function ptaskResponsibleOptionsHtml(selected){
+  const opts = Object.entries(ACTIVE_PEOPLE).filter(([k])=>k!=='general');
+  return '<option value="">Responsabilidad mía</option>' +
+    opts.map(([k,v])=>`<option value="${k}" ${k===selected?'selected':''}>${v}</option>`).join('');
+}
+
 function personalTaskResponsibleName(t){
+  if(t.responsiblePerson){
+    return PEOPLE[t.responsiblePerson] || t.responsiblePerson;
+  }
   if(t.linkedTeamTaskId){
     const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
     if(tt && tt.person && tt.person!=='general') return PEOPLE[tt.person] || tt.person;
@@ -2707,6 +2725,7 @@ function renderPersonalTasks(){
 async function addPersonalTask(){
   const textEl = document.getElementById('task-text-input');
   const areaEl = document.getElementById('task-area');
+  const responsibleEl = document.getElementById('task-responsible');
   const dueEl = document.getElementById('task-due-date');
   const timeEl = document.getElementById('task-time-input');
   const repeatEl = document.getElementById('task-repeat-daily');
@@ -2717,6 +2736,7 @@ async function addPersonalTask(){
   personalTasks.push({
     id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
     area: areaEl.value,
+    responsiblePerson: responsibleEl.value || '',
     text: text,
     dueDate: dueEl.value || '',
     time: timeEl.value || '',
@@ -2727,6 +2747,7 @@ async function addPersonalTask(){
   textEl.value = '';
   timeEl.value = '';
   repeatEl.checked = false;
+  responsibleEl.value = '';
   renderPersonalTasks();
   await savePersonalTasks();
   btn.disabled = false;
@@ -2748,6 +2769,7 @@ function openEditPersonalTask(id){
   if(!t) return;
   editingPersonalTaskId = id;
   document.getElementById('edit-ptask-area').value = t.area;
+  document.getElementById('edit-ptask-responsible').innerHTML = ptaskResponsibleOptionsHtml(t.responsiblePerson || '');
   document.getElementById('edit-ptask-due').value = t.dueDate || '';
   document.getElementById('edit-ptask-time').value = t.time || '';
   document.getElementById('edit-ptask-text').value = t.text;
@@ -2794,6 +2816,7 @@ async function saveEditPersonalTask(){
   if(!newText) return;
   t.text = newText;
   t.area = document.getElementById('edit-ptask-area').value;
+  t.responsiblePerson = document.getElementById('edit-ptask-responsible').value || '';
   t.dueDate = document.getElementById('edit-ptask-due').value || '';
   t.time = document.getElementById('edit-ptask-time').value || '';
   t.repeatDaily = document.getElementById('edit-ptask-repeat').checked;
@@ -2919,6 +2942,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
 (async function initMiDia(){
   document.getElementById('task-due-date').value = dateKey(new Date());
+  document.getElementById('task-responsible').innerHTML = ptaskResponsibleOptionsHtml('');
   renderDateHeader();
   renderTaskFilters();
   await loadPersonalTasks();
