@@ -1521,7 +1521,15 @@ function renderChecklist(){
     sel.addEventListener('change', async ()=>{
       const t = teamTasks.find(x=>x.id===sel.dataset.id);
       if(!t) return;
-      setTaskStatusForDate(t, nextRecurrence(t), sel.value);
+      const dKey = nextRecurrence(t);
+      setTaskStatusForDate(t, dKey, sel.value);
+      if(t.linkedPersonalTaskId){
+        const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
+        if(pt && syncLinkedDoneStatus(t, pt, dKey)){
+          renderPersonalTasks();
+          await savePersonalTasks();
+        }
+      }
       renderChecklist();
       renderLists();
       refreshCalendars();
@@ -1748,7 +1756,15 @@ function renderLists(){
     sel.addEventListener('change', async ()=>{
       const t = teamTasks.find(x=>x.id===sel.dataset.id);
       if(!t) return;
-      setTaskStatusForDate(t, nextRecurrence(t), sel.value);
+      const dKey = nextRecurrence(t);
+      setTaskStatusForDate(t, dKey, sel.value);
+      if(t.linkedPersonalTaskId){
+        const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
+        if(pt && syncLinkedDoneStatus(t, pt, dKey)){
+          renderPersonalTasks();
+          await savePersonalTasks();
+        }
+      }
       renderLists();
       renderChecklist();
       refreshCalendars();
@@ -1768,6 +1784,37 @@ function refreshCalendars(){
     renderCalendarMonth('admin');
     renderCalendarMonth('emp');
   }
+}
+
+/* ===== Sincronización bilateral: tarea de equipo <-> su copia en Mi Día ===== */
+// Copia texto/fecha/horario de la tarea de equipo hacia su copia personal vinculada.
+function pushTeamFieldsToPersonal(t){
+  if(!t.linkedPersonalTaskId) return null;
+  const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
+  if(!pt) return null;
+  pt.text = t.text;
+  pt.dueDate = t.dueDate;
+  pt.time = t.time;
+  return pt;
+}
+// Copia texto/fecha/horario de la tarea personal hacia la tarea de equipo vinculada.
+function pushPersonalFieldsToTeam(pt){
+  if(!pt.linkedTeamTaskId) return null;
+  const t = teamTasks.find(x=>x.id===pt.linkedTeamTaskId);
+  if(!t) return null;
+  t.text = pt.text;
+  t.dueDate = pt.dueDate;
+  t.time = pt.time;
+  return t;
+}
+// Sincroniza el estado (hecho/pendiente) de una fecha entre dos tareas vinculadas.
+function syncLinkedDoneStatus(a, b, dateStr){
+  if(!a || !b) return false;
+  if(isTaskDoneForDate(a, dateStr) !== isTaskDoneForDate(b, dateStr)){
+    toggleTaskDoneForDate(b, dateStr);
+    return true;
+  }
+  return false;
 }
 
 async function toggleTeamTaskResolved(id){
@@ -1797,6 +1844,14 @@ async function postponeTeamTask(id){
   const t = teamTasks.find(x=>x.id===id);
   if(!t || taskRepeatType(t) !== 'none') return;
   t.dueDate = nextDayKey(t.dueDate || todayKey());
+  if(t.linkedPersonalTaskId){
+    const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
+    if(pt){
+      pt.dueDate = t.dueDate;
+      await savePersonalTasks();
+      renderPersonalTasks();
+    }
+  }
   if(employeePersona){
     renderEmployeeView();
   } else {
@@ -1809,6 +1864,12 @@ async function postponeTeamTask(id){
 }
 
 async function deleteTeamTask(id){
+  const t = teamTasks.find(x=>x.id===id);
+  if(t && t.linkedPersonalTaskId){
+    personalTasks = personalTasks.filter(x=>x.id!==t.linkedPersonalTaskId);
+    renderPersonalTasks();
+    await savePersonalTasks();
+  }
   teamTasks = teamTasks.filter(x=>x.id!==id);
   renderLists();
   renderChecklist();
@@ -2139,7 +2200,14 @@ function renderEmployeeView(){
     sel.addEventListener('change', async ()=>{
       const t = teamTasks.find(x=>x.id===sel.dataset.id);
       if(!t) return;
-      setTaskStatusForDate(t, nextRecurrence(t), sel.value);
+      const dKey = nextRecurrence(t);
+      setTaskStatusForDate(t, dKey, sel.value);
+      if(t.linkedPersonalTaskId){
+        const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
+        if(pt && syncLinkedDoneStatus(t, pt, dKey)){
+          await savePersonalTasks();
+        }
+      }
       renderEmployeeView();
       refreshCalendars();
       await saveTeamTasks();
@@ -2386,7 +2454,8 @@ async function saveEditTeamTask(){
     t.statusDates = {};
     t.doneDates = {};
   }
-  setTaskStatusForDate(t, dueDateChanged ? newDueDate : (editingTeamTaskDateStr || todayKey()), document.getElementById('edit-task-status').value);
+  const statusDateKey = dueDateChanged ? newDueDate : (editingTeamTaskDateStr || todayKey());
+  setTaskStatusForDate(t, statusDateKey, document.getElementById('edit-task-status').value);
   if(!employeePersona){
     const sharedNow = document.getElementById('edit-task-shared').checked;
     if(sharedNow && !t.sharedWithMe){
@@ -2399,6 +2468,15 @@ async function saveEditTeamTask(){
       delete t.linkedPersonalTaskId;
     }
     t.sharedWithMe = sharedNow;
+  }
+  // Bilateral: si sigue compartida, la copia en Mi Día tiene que quedar igual (texto, fecha, hora y estado).
+  if(t.linkedPersonalTaskId){
+    const pt = pushTeamFieldsToPersonal(t);
+    if(pt){
+      syncLinkedDoneStatus(t, pt, statusDateKey);
+      renderPersonalTasks();
+      await savePersonalTasks();
+    }
   }
   closeEditTeamTask();
   if(employeePersona){
@@ -2712,9 +2790,17 @@ function renderPersonalTasks(){
   });
   el.querySelectorAll('.ptask-del').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
+      const pt = personalTasks.find(x=>x.id===btn.dataset.id);
       personalTasks = personalTasks.filter(x=>x.id!==btn.dataset.id);
       renderPersonalTasks();
       await savePersonalTasks();
+      if(pt && pt.linkedTeamTaskId){
+        teamTasks = teamTasks.filter(x=>x.id!==pt.linkedTeamTaskId);
+        renderLists();
+        renderChecklist();
+        refreshCalendars();
+        await saveTeamTasks();
+      }
     });
   });
   renderDaySummary();
@@ -2804,6 +2890,16 @@ async function postponePersonalTask(id){
   t.dueDate = nextDayKey(t.dueDate || dateKey(currentDate));
   renderPersonalTasks();
   await savePersonalTasks();
+  if(t.linkedTeamTaskId){
+    const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
+    if(tt){
+      tt.dueDate = t.dueDate;
+      renderLists();
+      renderChecklist();
+      refreshCalendars();
+      await saveTeamTasks();
+    }
+  }
   setStatus('pospuesta a mañana');
 }
 
@@ -2821,6 +2917,15 @@ async function saveEditPersonalTask(){
   closeEditPersonalTask();
   renderPersonalTasks();
   await savePersonalTasks();
+  if(t.linkedTeamTaskId){
+    const tt = pushPersonalFieldsToTeam(t);
+    if(tt){
+      renderLists();
+      renderChecklist();
+      refreshCalendars();
+      await saveTeamTasks();
+    }
+  }
 }
 
 document.getElementById('edit-ptask-cancel').addEventListener('click', closeEditPersonalTask);
@@ -3129,6 +3234,12 @@ function refreshOpenCalDayModal(){
 }
 
 async function deleteTeamTaskFromCalendar(id){
+  const t = teamTasks.find(x=>x.id===id);
+  if(t && t.linkedPersonalTaskId){
+    personalTasks = personalTasks.filter(x=>x.id!==t.linkedPersonalTaskId);
+    renderPersonalTasks();
+    await savePersonalTasks();
+  }
   teamTasks = teamTasks.filter(x=>x.id!==id);
   renderLists();
   renderChecklist();
