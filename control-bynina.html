@@ -999,7 +999,7 @@
           <option value="personal">Personal</option>
         </select>
         <select id="task-responsible">
-          <option value="">Responsabilidad mía</option>
+          <option value="">Ari</option>
         </select>
         <input type="date" id="task-due-date">
         <input type="time" id="task-time-input">
@@ -1150,7 +1150,7 @@
     <div class="modal-field">
       <label for="edit-ptask-responsible">Responsable</label>
       <select id="edit-ptask-responsible">
-        <option value="">Responsabilidad mía</option>
+        <option value="">Ari</option>
       </select>
     </div>
     <div class="modal-field">
@@ -2573,11 +2573,9 @@ function personalTaskHtml(t){
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   const postponeBtn = t.repeatDaily ? '' : `<button class="edit-btn ptask-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   let responsableLabel = '';
-  if(t.linkedTeamTaskId){
-    const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
-    if(tt && tt.person && tt.person!=='general'){
-      responsableLabel = `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(PEOPLE[tt.person]||tt.person)}</span>`;
-    }
+  const responsableName = personalTaskResponsibleName(t);
+  if(responsableName){
+    responsableLabel = `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(responsableName)}</span>`;
   }
   return `
     <div class="ticket ${done?'resolved':''} ${responsableLabel?'shared-ticket':''}">
@@ -2603,7 +2601,7 @@ function personalTaskHtml(t){
 
 function ptaskResponsibleOptionsHtml(selected){
   const opts = Object.entries(ACTIVE_PEOPLE).filter(([k])=>k!=='general');
-  return '<option value="">Responsabilidad mía</option>' +
+  return '<option value="">Ari</option>' +
     opts.map(([k,v])=>`<option value="${k}" ${k===selected?'selected':''}>${v}</option>`).join('');
 }
 
