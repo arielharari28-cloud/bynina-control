@@ -1463,7 +1463,17 @@ function renderChecklist(){
     const progressClass = done === 0 ? 'zero' : '';
     const personKey = Object.keys(PEOPLE).find(k => PEOPLE[k] === sec.person);
     const pendingTeam = teamTasks.filter(t => (taskRepeatType(t)!=='none' || !isTaskDoneForDate(t, todayKey())) && t.person === personKey)
-      .sort((a,b)=>b.ts-a.ts);
+      .sort((a,b)=>{
+        const da = effectiveDueKey(a), db = effectiveDueKey(b);
+        if(da && db){
+          const cmp = da.localeCompare(db);
+          if(cmp !== 0) return cmp;
+          return (a.time||'').localeCompare(b.time||'');
+        }
+        if(da) return -1;
+        if(db) return 1;
+        return b.ts - a.ts;
+      });
     const teamBlock = pendingTeam.length ? `
       <div class="check-team-tasks">
         ${pendingTeam.map(teamTaskRowHtml).join('')}
