@@ -300,6 +300,16 @@
     color:var(--red);
     font-weight:700;
   }
+  .due-badge.today{
+    background:var(--rust-soft);
+    color:var(--rust);
+    font-weight:700;
+  }
+  .due-badge.soon{
+    background:#faf1cf;
+    color:#8a6d1b;
+    font-weight:600;
+  }
   .time-badge{
     background:var(--purple-soft);
     color:var(--purple);
@@ -1061,7 +1071,7 @@ function renderLists(){
   const resolvedEl = document.getElementById('resolved-list');
 
   const filtered = activeFilter==='todos' ? teamTasks : teamTasks.filter(t=>t.person===activeFilter);
-  const pending = filtered.filter(t=>!t.resolved).sort((a,b)=>b.ts-a.ts);
+  const pending = filtered.filter(t=>!t.resolved).sort(dueSortCompare);
   const resolved = filtered.filter(t=>t.resolved).sort((a,b)=>b.ts-a.ts);
 
   pendingEl.innerHTML = pending.length ? pending.map(teamTicketHtml).join('') :
@@ -1217,9 +1227,44 @@ function isOverdue(dueStr, resolved){
   return dueStr < today;
 }
 
+// Devuelve 'overdue' | 'today' | 'soon' (dentro de 2 días) | 'later' | 'none'
+function getDueStatus(dueStr, resolved){
+  if(!dueStr || resolved) return 'none';
+  const [y,m,d] = dueStr.split('-').map(Number);
+  const due = new Date(y, m-1, d);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((due - today) / 86400000);
+  if(diffDays < 0) return 'overdue';
+  if(diffDays === 0) return 'today';
+  if(diffDays <= 2) return 'soon';
+  return 'later';
+}
+
+function dueBadgeHtml(dueStr, resolved){
+  if(!dueStr) return '';
+  const status = getDueStatus(dueStr, resolved);
+  const cls = status === 'none' ? '' : status;
+  const label = status === 'overdue' ? 'venció ' : status === 'today' ? 'vence hoy' : 'vence ';
+  const dateText = status === 'today' ? '' : fmtDue(dueStr);
+  return `<span class="due-badge ${cls}">${label}${dateText}</span>`;
+}
+
+// Compara tareas para ordenar "pendientes" por fecha de vencimiento (las sin
+// fecha quedan al final, ordenadas por más recientes primero)
+function dueSortCompare(a, b){
+  if(a.dueDate && b.dueDate){
+    const cmp = a.dueDate.localeCompare(b.dueDate);
+    if(cmp !== 0) return cmp;
+    return (a.time||'').localeCompare(b.time||'') || (a.ts - b.ts);
+  }
+  if(a.dueDate) return -1;
+  if(b.dueDate) return 1;
+  return b.ts - a.ts;
+}
+
 function teamTicketHtml(t){
-  const overdue = isOverdue(t.dueDate, t.resolved);
-  const dueLabel = t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '';
+  const dueLabel = dueBadgeHtml(t.dueDate, t.resolved);
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   return `
     <div class="ticket ${t.resolved?'resolved':''}">
@@ -1240,8 +1285,7 @@ function teamTicketHtml(t){
 }
 
 function teamTaskRowHtml(t){
-  const overdue = isOverdue(t.dueDate, t.resolved);
-  const dueLabel = t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '';
+  const dueLabel = dueBadgeHtml(t.dueDate, t.resolved);
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   return `
     <div class="check-item check-team-item">
@@ -1659,8 +1703,7 @@ function renderTaskFilters(){
 }
 
 function personalTaskHtml(t){
-  const overdue = isOverdue(t.dueDate, t.resolved);
-  const dueLabel = t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '';
+  const dueLabel = dueBadgeHtml(t.dueDate, t.resolved);
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   return `
     <div class="ticket ${t.resolved?'resolved':''}">
