@@ -317,6 +317,16 @@
     color:var(--red);
     font-weight:700;
   }
+  .due-badge.today{
+    background:var(--rust-soft);
+    color:var(--rust);
+    font-weight:700;
+  }
+  .due-badge.soon{
+    background:#faf1cf;
+    color:#8a6d1b;
+    font-weight:600;
+  }
   .time-badge{
     background:var(--purple-soft);
     color:var(--purple);
@@ -2036,6 +2046,29 @@ function isOverdue(dueStr, resolved){
   return dueStr < today;
 }
 
+// Devuelve 'overdue' | 'today' | 'soon' (dentro de 2 días) | 'later' | 'none'
+function getDueStatus(dueStr, resolved){
+  if(!dueStr || resolved) return 'none';
+  const [y,m,d] = dueStr.split('-').map(Number);
+  const due = new Date(y, m-1, d);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((due - today) / 86400000);
+  if(diffDays < 0) return 'overdue';
+  if(diffDays === 0) return 'today';
+  if(diffDays <= 2) return 'soon';
+  return 'later';
+}
+
+function dueBadgeHtml(dueStr, resolved){
+  if(!dueStr) return '';
+  const status = getDueStatus(dueStr, resolved);
+  const cls = status === 'none' ? '' : status;
+  const label = status === 'overdue' ? 'venció ' : status === 'today' ? 'vence hoy' : 'vence ';
+  const dateText = status === 'today' ? '' : fmtDue(dueStr);
+  return `<span class="due-badge ${cls}">${label}${dateText}</span>`;
+}
+
 function categoryTagHtml(t){
   const cat = t.category || 'otro';
   const label = TASK_CATEGORIES[cat] || TASK_CATEGORIES.otro;
@@ -2047,16 +2080,13 @@ function repeatBadgeHtml(t){
   const type = taskRepeatType(t);
   if(type === 'none') return null;
   const next = nextRecurrence(t);
-  const overdue = next < todayKey();
-  return `<span class="due-badge repeat-badge">🔁 ${REPEAT_LABELS[type].toLowerCase()}</span><span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(next)}</span>`;
+  return `<span class="due-badge repeat-badge">🔁 ${REPEAT_LABELS[type].toLowerCase()}</span>${dueBadgeHtml(next, false)}`;
 }
 
 function teamTicketHtml(t){
   const repType = taskRepeatType(t);
   const done = repType!=='none' ? false : isTaskDoneForDate(t, todayKey());
-  const overdue = repType==='none' && isOverdue(t.dueDate, done);
-  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) :
-    (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
+  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) : dueBadgeHtml(t.dueDate, done);
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn team-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   const undoBtn = (repType!=='none' && lastCompletedOccurrence(t)) ? `<button class="edit-btn task-undo" data-id="${t.id}" title="Deshacer última finalización">↩</button>` : '';
@@ -2086,9 +2116,7 @@ function teamTicketHtml(t){
 function teamTaskRowHtml(t){
   const repType = taskRepeatType(t);
   const done = repType!=='none' ? false : isTaskDoneForDate(t, todayKey());
-  const overdue = repType==='none' && isOverdue(t.dueDate, done);
-  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) :
-    (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
+  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) : dueBadgeHtml(t.dueDate, done);
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn team-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   const undoBtn = (repType!=='none' && lastCompletedOccurrence(t)) ? `<button class="edit-btn task-undo" data-id="${t.id}" title="Deshacer última finalización">↩</button>` : '';
@@ -2108,9 +2136,7 @@ function teamTaskRowHtml(t){
 function employeeTicketHtml(t){
   const repType = taskRepeatType(t);
   const done = repType!=='none' ? false : isTaskDoneForDate(t, todayKey());
-  const overdue = repType==='none' && isOverdue(t.dueDate, done);
-  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) :
-    (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
+  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) : dueBadgeHtml(t.dueDate, done);
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn employee-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   const undoBtn = (repType!=='none' && lastCompletedOccurrence(t)) ? `<button class="edit-btn task-undo" data-id="${t.id}" title="Deshacer última finalización">↩</button>` : '';
@@ -2655,9 +2681,7 @@ function renderTaskFilters(){
 
 function personalTaskHtml(t){
   const done = isTaskDoneForDate(t, todayKey());
-  const overdue = !t.repeatDaily && isOverdue(t.dueDate, done);
-  const dueLabel = t.repeatDaily ? `<span class="due-badge repeat-badge">🔁 diario</span>` :
-    (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
+  const dueLabel = t.repeatDaily ? `<span class="due-badge repeat-badge">🔁 diario</span>` : dueBadgeHtml(t.dueDate, done);
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   const postponeBtn = t.repeatDaily ? '' : `<button class="edit-btn ptask-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   let responsableLabel = '';
