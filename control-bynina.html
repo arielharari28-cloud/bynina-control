@@ -2844,6 +2844,64 @@ function renderPersonalTasks(){
   renderDaySummary();
 }
 
+// Cuando desde "Mi Día" se asigna un Responsable (alguien que no sea Ari), esa persona
+// tiene que verla en su propia vista (?persona=...), que lee de teamTasks. Antes esto
+// era solo una etiqueta visual y nunca llegaba a la vista del empleado; esta función
+// crea/actualiza/borra la tarea de equipo vinculada según corresponda.
+async function syncResponsibleToTeamTask(pt){
+  const person = pt.responsiblePerson || '';
+  if(person){
+    if(pt.linkedTeamTaskId && pt.assignedViaResponsable){
+      const tt = teamTasks.find(x=>x.id===pt.linkedTeamTaskId);
+      if(tt){
+        tt.person = person;
+        tt.text = pt.text;
+        tt.dueDate = pt.dueDate;
+        tt.time = pt.time;
+        tt.repeat = taskRepeatType(pt);
+        await saveTeamTasks();
+        renderLists();
+        renderChecklist();
+        refreshCalendars();
+      }
+      return;
+    }
+    if(!pt.linkedTeamTaskId){
+      const newTeamTask = {
+        id: 't' + Date.now() + Math.random().toString(36).slice(2,7),
+        person: person,
+        text: pt.text,
+        category: 'otro',
+        dueDate: pt.dueDate,
+        time: pt.time,
+        ts: Date.now(),
+        resolved: false,
+        repeat: taskRepeatType(pt),
+        sharedWithMe: true,
+        linkedPersonalTaskId: pt.id
+      };
+      teamTasks.push(newTeamTask);
+      pt.linkedTeamTaskId = newTeamTask.id;
+      pt.assignedViaResponsable = true;
+      await saveTeamTasks();
+      await savePersonalTasks();
+      renderLists();
+      renderChecklist();
+      refreshCalendars();
+    }
+  } else if(pt.linkedTeamTaskId && pt.assignedViaResponsable){
+    // Se sacó el responsable: la tarea de equipo se creó solo para esto, se elimina.
+    teamTasks = teamTasks.filter(x=>x.id!==pt.linkedTeamTaskId);
+    delete pt.linkedTeamTaskId;
+    delete pt.assignedViaResponsable;
+    await saveTeamTasks();
+    await savePersonalTasks();
+    renderLists();
+    renderChecklist();
+    refreshCalendars();
+  }
+}
+
 async function addPersonalTask(){
   const textEl = document.getElementById('task-text-input');
   const areaEl = document.getElementById('task-area');
@@ -2855,7 +2913,7 @@ async function addPersonalTask(){
   if(!text) return;
   const btn = document.getElementById('task-add-btn');
   btn.disabled = true;
-  personalTasks.push({
+  const newTask = {
     id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
     area: areaEl.value,
     responsiblePerson: responsibleEl.value || '',
@@ -2865,13 +2923,16 @@ async function addPersonalTask(){
     ts: Date.now(),
     resolved: false,
     repeatDaily: repeatEl.checked
-  });
+  };
+  personalTasks.push(newTask);
   textEl.value = '';
   timeEl.value = '';
   repeatEl.checked = false;
   responsibleEl.value = '';
   renderPersonalTasks();
   await savePersonalTasks();
+  await syncResponsibleToTeamTask(newTask);
+  renderPersonalTasks();
   btn.disabled = false;
   textEl.focus();
 }
@@ -2964,6 +3025,8 @@ async function saveEditPersonalTask(){
       await saveTeamTasks();
     }
   }
+  await syncResponsibleToTeamTask(t);
+  renderPersonalTasks();
 }
 
 document.getElementById('edit-ptask-cancel').addEventListener('click', closeEditPersonalTask);
