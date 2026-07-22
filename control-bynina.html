@@ -1815,6 +1815,8 @@ function pushTeamFieldsToPersonal(t){
   pt.text = t.text;
   pt.dueDate = t.dueDate;
   pt.time = t.time;
+  pt.repeat = taskRepeatType(t);
+  delete pt.repeatDaily;
   return pt;
 }
 // Copia texto/fecha/horario de la tarea personal hacia la tarea de equipo vinculada.
@@ -2348,7 +2350,7 @@ async function addTeamTask(){
   refreshCalendars();
   await saveTeamTasks();
   if(involveMe){
-    const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTasks[0].id, repeat==='daily');
+    const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTasks[0].id, repeat);
     newTasks[0].linkedPersonalTaskId = linkedId;
     newTasks[0].sharedWithMe = true;
     refreshCalendars();
@@ -2417,7 +2419,7 @@ async function addEmployeeTask(){
   refreshCalendars();
   await saveTeamTasks();
   if(involveBoss){
-    const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTeamTask.id, repeat==='daily');
+    const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTeamTask.id, repeat);
     newTeamTask.linkedPersonalTaskId = linkedId;
     newTeamTask.sharedWithMe = true;
     refreshCalendars();
@@ -2495,7 +2497,7 @@ async function saveEditTeamTask(){
   if(!employeePersona){
     const sharedNow = document.getElementById('edit-task-shared').checked;
     if(sharedNow && !t.sharedWithMe){
-      const linkedId = await addToMyTasksForDate(t.dueDate || todayKey(), t.time || '', t.text, t.id, taskRepeatType(t)==='daily');
+      const linkedId = await addToMyTasksForDate(t.dueDate || todayKey(), t.time || '', t.text, t.id, taskRepeatType(t));
       t.linkedPersonalTaskId = linkedId;
     } else if(!sharedNow && t.sharedWithMe && t.linkedPersonalTaskId){
       personalTasks = personalTasks.filter(p=>p.id!==t.linkedPersonalTaskId);
@@ -2588,7 +2590,8 @@ function isSameDay(d1,d2){
   return dateKey(d1) === dateKey(d2);
 }
 
-async function addToMyTasksForDate(dateStr, time, text, linkedTeamTaskId, repeatDaily){
+async function addToMyTasksForDate(dateStr, time, text, linkedTeamTaskId, repeatType){
+  const repeat = repeatType || 'none';
   const newTask = {
     id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
     area: 'nina',
@@ -2597,7 +2600,7 @@ async function addToMyTasksForDate(dateStr, time, text, linkedTeamTaskId, repeat
     time: time || '',
     ts: Date.now(),
     resolved: false,
-    repeatDaily: !!repeatDaily,
+    repeat: repeat,
     linkedTeamTaskId: linkedTeamTaskId || null
   };
   personalTasks.push(newTask);
@@ -2681,9 +2684,10 @@ function renderTaskFilters(){
 
 function personalTaskHtml(t){
   const done = isTaskDoneForDate(t, todayKey());
-  const dueLabel = t.repeatDaily ? `<span class="due-badge repeat-badge">🔁 diario</span>` : dueBadgeHtml(t.dueDate, done);
+  const repType = taskRepeatType(t);
+  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) : dueBadgeHtml(t.dueDate, done);
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
-  const postponeBtn = t.repeatDaily ? '' : `<button class="edit-btn ptask-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
+  const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn ptask-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   let responsableLabel = '';
   const responsableName = personalTaskResponsibleName(t);
   if(responsableName){
