@@ -971,17 +971,6 @@
 
   <div class="section-title st-green">Resueltos</div>
   <div id="resolved-list"></div>
-
-  <div class="section-title st-purple">Checklist diario del equipo</div>
-  <div class="checklist-sub" id="checklist-date"></div>
-  <div class="checklist-toggle" id="checklist-edit-toggle">✏️ Editar checklist (orden, horarios, tareas)</div>
-  <div id="checklist"></div>
-
-  <div class="checklist-editor" id="checklist-editor" style="display:none;">
-    <div class="checklist-editor-hint">Modo edición activo — ordená con las flechas, agregá horario, y sumá o sacá tareas. Se guarda solo.</div>
-    <div id="checklist-editor-body"></div>
-    <button class="cl-add-section-btn" id="checklist-add-section">+ agregar persona</button>
-  </div>
   </div>
 
   <div id="tab-mi-dia" class="tab-panel">
@@ -1058,7 +1047,6 @@
   </div>
 
   <div id="emp-tab-tareas" class="tab-panel active">
-  <div id="employee-checklist"></div>
 
   <div class="section-title st-rust">Agregar tarea</div>
   <div class="capture">
@@ -1386,23 +1374,11 @@ function escapeAttr(str){
 const CHECKLIST_CONFIG_KEY = 'control_bynina/checklistConfig';
 
 async function loadChecklistConfig(){
-  try{
-    const val = await fbGet(CHECKLIST_CONFIG_KEY);
-    if(val){
-      checklistData = JSON.parse(val);
-    } else {
-      checklistData = JSON.parse(JSON.stringify(defaultChecklistData));
-      await saveChecklistConfig();
-    }
-  }catch(e){
-    checklistData = JSON.parse(JSON.stringify(defaultChecklistData));
-  }
+  // Checklist diario del equipo: funcionalidad retirada a pedido de Ariel (23/07).
 }
 
 async function saveChecklistConfig(){
-  try{
-    await fbSet(CHECKLIST_CONFIG_KEY, JSON.stringify(checklistData));
-  }catch(e){}
+  // Checklist diario del equipo: funcionalidad retirada a pedido de Ariel (23/07).
 }
 
 let checklistState = {};
@@ -1447,208 +1423,21 @@ function taskAppliesToDate(t, dateStr){
 }
 
 async function loadChecklist(){
-  const key = 'control_bynina/checklist/' + todayKey();
-  try{
-    const val = await fbGet(key);
-    checklistState = val ? JSON.parse(val) : {};
-  }catch(e){
-    checklistState = {};
-  }
+  // Checklist diario del equipo: funcionalidad retirada a pedido de Ariel (23/07).
 }
 
 async function saveChecklistItem(id, checked){
-  checklistState[id] = checked;
-  const key = 'control_bynina/checklist/' + todayKey();
-  try{
-    await fbSet(key, JSON.stringify(checklistState));
-  }catch(e){}
+  // Checklist diario del equipo: funcionalidad retirada a pedido de Ariel (23/07).
 }
 
 function renderChecklist(){
-  document.getElementById('checklist-date').textContent = 'hoy, ' + document.getElementById('today').textContent + ' — se reinicia solo cada día';
-  const el = document.getElementById('checklist');
-  el.innerHTML = checklistData.map(sec => {
-    const total = sec.items.length;
-    const done = sec.items.filter(it => checklistState[it.id]).length;
-    const progressClass = done === 0 ? 'zero' : '';
-    const personKey = Object.keys(PEOPLE).find(k => PEOPLE[k] === sec.person);
-    const pendingTeam = teamTasks.filter(t => (taskRepeatType(t)!=='none' || !isTaskDoneForDate(t, todayKey())) && t.person === personKey)
-      .sort((a,b)=>{
-        const da = effectiveDueKey(a), db = effectiveDueKey(b);
-        if(da && db){
-          const cmp = da.localeCompare(db);
-          if(cmp !== 0) return cmp;
-          return (a.time||'').localeCompare(b.time||'');
-        }
-        if(da) return -1;
-        if(db) return 1;
-        return b.ts - a.ts;
-      });
-    const teamBlock = pendingTeam.length ? `
-      <div class="check-team-tasks">
-        ${pendingTeam.map(teamTaskRowHtml).join('')}
-      </div>
-    ` : '';
-    return `
-      <div class="check-card">
-        <div class="check-card-header">
-          <div class="check-card-name">${sec.person}</div>
-          <div class="check-progress ${progressClass}">${done}/${total}</div>
-        </div>
-        ${sec.items.map(it => `
-          <div class="check-item ${checklistState[it.id] ? 'done' : ''}">
-            <input type="checkbox" id="chk-${it.id}" ${checklistState[it.id] ? 'checked' : ''}>
-            <div class="check-item-body">
-              <label for="chk-${it.id}">${escapeHtml(it.label)}</label>
-              ${it.time ? `<span class="due-badge time-badge">🕐 ${escapeHtml(it.time)}</span>` : ''}
-            </div>
-          </div>
-        `).join('')}
-        ${teamBlock}
-      </div>
-    `;
-  }).join('');
-
-  el.querySelectorAll('input[type=checkbox]').forEach(cb=>{
-    cb.addEventListener('change', async ()=>{
-      const id = cb.id.replace('chk-','');
-      await saveChecklistItem(id, cb.checked);
-      renderChecklist();
-    });
-  });
-
-  el.querySelectorAll('.team-check').forEach(btn=>{
-    btn.addEventListener('click', ()=>toggleTeamTaskResolved(btn.dataset.id));
-  });
-  el.querySelectorAll('.team-del').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      teamTasks = teamTasks.filter(x=>x.id!==btn.dataset.id);
-      renderChecklist();
-      renderLists();
-      await saveTeamTasks();
-    });
-  });
-  el.querySelectorAll('.team-postpone').forEach(btn=>{
-    btn.addEventListener('click', ()=>postponeTeamTask(btn.dataset.id));
-  });
-  el.querySelectorAll('.task-undo').forEach(btn=>{
-    btn.addEventListener('click', ()=>undoTeamTaskCompletion(btn.dataset.id));
-  });
-  el.querySelectorAll('.team-edit').forEach(btn=>{
-    btn.addEventListener('click', ()=>openEditTeamTask(btn.dataset.id));
-  });
-  el.querySelectorAll('.task-status-select').forEach(sel=>{
-    sel.addEventListener('change', async ()=>{
-      const t = teamTasks.find(x=>x.id===sel.dataset.id);
-      if(!t) return;
-      const dKey = nextRecurrence(t);
-      setTaskStatusForDate(t, dKey, sel.value);
-      if(t.linkedPersonalTaskId){
-        const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
-        if(pt && syncLinkedDoneStatus(t, pt, dKey)){
-          renderPersonalTasks();
-          await savePersonalTasks();
-        }
-      }
-      renderChecklist();
-      renderLists();
-      refreshCalendars();
-      await saveTeamTasks();
-    });
-  });
+  // Checklist diario del equipo: funcionalidad retirada a pedido de Ariel (23/07).
 }
+
 
 function renderChecklistEditor(){
-  const panel = document.getElementById('checklist-editor');
-  if(!checklistEditMode){
-    panel.style.display = 'none';
-    return;
-  }
-  panel.style.display = '';
-  const body = document.getElementById('checklist-editor-body');
-  body.innerHTML = checklistData.map((sec, si) => `
-    <div class="cl-edit-card">
-      <div class="cl-edit-header">
-        <button class="cl-move-btn" data-act="sec-up" data-si="${si}" ${si===0?'disabled':''} title="Subir">▲</button>
-        <button class="cl-move-btn" data-act="sec-down" data-si="${si}" ${si===checklistData.length-1?'disabled':''} title="Bajar">▼</button>
-        <input type="text" data-act="sec-name" data-si="${si}" value="${escapeAttr(sec.person)}">
-        <button class="del-btn" data-act="sec-del" data-si="${si}" title="Eliminar persona">×</button>
-      </div>
-      ${sec.items.map((it, ii) => `
-        <div class="cl-item-row">
-          <button class="cl-move-btn" data-act="item-up" data-si="${si}" data-ii="${ii}" ${ii===0?'disabled':''} title="Subir">▲</button>
-          <button class="cl-move-btn" data-act="item-down" data-si="${si}" data-ii="${ii}" ${ii===sec.items.length-1?'disabled':''} title="Bajar">▼</button>
-          <input type="text" data-act="item-label" data-si="${si}" data-ii="${ii}" value="${escapeAttr(it.label)}">
-          <input type="time" data-act="item-time" data-si="${si}" data-ii="${ii}" value="${escapeAttr(it.time||'')}">
-          <button class="del-btn" data-act="item-del" data-si="${si}" data-ii="${ii}" title="Eliminar tarea">×</button>
-        </div>
-      `).join('')}
-      <button class="cl-add-item-btn" data-act="item-add" data-si="${si}">+ agregar tarea</button>
-    </div>
-  `).join('');
-
-  body.querySelectorAll('input[data-act=sec-name]').forEach(inp=>{
-    inp.addEventListener('change', async ()=>{
-      const si = +inp.dataset.si;
-      checklistData[si].person = inp.value.trim() || checklistData[si].person;
-      await saveChecklistConfig();
-      renderChecklist();
-    });
-  });
-  body.querySelectorAll('input[data-act=item-label]').forEach(inp=>{
-    inp.addEventListener('change', async ()=>{
-      const si = +inp.dataset.si, ii = +inp.dataset.ii;
-      checklistData[si].items[ii].label = inp.value.trim() || checklistData[si].items[ii].label;
-      await saveChecklistConfig();
-      renderChecklist();
-    });
-  });
-  body.querySelectorAll('input[data-act=item-time]').forEach(inp=>{
-    inp.addEventListener('change', async ()=>{
-      const si = +inp.dataset.si, ii = +inp.dataset.ii;
-      checklistData[si].items[ii].time = inp.value || '';
-      await saveChecklistConfig();
-      renderChecklist();
-    });
-  });
-  body.querySelectorAll('button[data-act]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      const act = btn.dataset.act;
-      const si = +btn.dataset.si;
-      const ii = btn.dataset.ii !== undefined ? +btn.dataset.ii : null;
-      if(act === 'sec-up' && si > 0){
-        [checklistData[si-1], checklistData[si]] = [checklistData[si], checklistData[si-1]];
-      } else if(act === 'sec-down' && si < checklistData.length-1){
-        [checklistData[si+1], checklistData[si]] = [checklistData[si], checklistData[si+1]];
-      } else if(act === 'sec-del'){
-        if(!confirm('¿Eliminar a ' + checklistData[si].person + ' y todas sus tareas de la checklist?')) return;
-        checklistData.splice(si, 1);
-      } else if(act === 'item-up' && ii > 0){
-        const arr = checklistData[si].items;
-        [arr[ii-1], arr[ii]] = [arr[ii], arr[ii-1]];
-      } else if(act === 'item-down' && ii < checklistData[si].items.length-1){
-        const arr = checklistData[si].items;
-        [arr[ii+1], arr[ii]] = [arr[ii], arr[ii+1]];
-      } else if(act === 'item-del'){
-        checklistData[si].items.splice(ii, 1);
-      } else if(act === 'item-add'){
-        checklistData[si].items.push({id: genChecklistId('item'), label: 'Nueva tarea', time: ''});
-      } else {
-        return;
-      }
-      await saveChecklistConfig();
-      renderChecklist();
-      renderChecklistEditor();
-    });
-  });
+  // Editor del checklist: funcionalidad retirada a pedido de Ariel (23/07).
 }
-
-document.getElementById('checklist-add-section').addEventListener('click', async ()=>{
-  checklistData.push({person: 'Nueva persona', items: [{id: genChecklistId('item'), label: 'Nueva tarea', time: ''}]});
-  await saveChecklistConfig();
-  renderChecklist();
-  renderChecklistEditor();
-});
 
 function fmtTime(ts){
   const d = new Date(ts);
@@ -1707,6 +1496,42 @@ function effectiveDueKey(t){
   return t.dueDate || '';
 }
 
+// Fecha sobre la que actúan el selector de estado y el check de una tarea "en vivo":
+// para tareas repetitivas siempre es HOY (así el estado que ves y marcás es siempre
+// el de hoy, y no salta al próximo día libre apenas marcás "Finalizado").
+// Para tareas de una sola vez, es su fecha de vencimiento de siempre.
+function currentOccurrenceKey(t){
+  return taskRepeatType(t) === 'none' ? (t.dueDate || todayKey()) : todayKey();
+}
+
+// Permite marcar como hecha la ocurrencia de AYER de una tarea repetitiva sin tocar la de hoy.
+// Sólo tiene sentido si la tarea realmente le tocaba ayer y todavía no estaba marcada.
+function yesterdayKeyFor(t){
+  if(taskRepeatType(t) === 'none') return null;
+  const y = new Date(todayKey()+'T00:00:00');
+  y.setDate(y.getDate()-1);
+  const yKey = dateKey(y);
+  if(!taskRecursOnDate(t, yKey)) return null;
+  if(getTaskStatusForDate(t, yKey) === 'finalizado') return null;
+  return yKey;
+}
+async function markYesterdayDone(id){
+  const t = teamTasks.find(x=>x.id===id);
+  if(!t) return;
+  const yKey = yesterdayKeyFor(t);
+  if(!yKey) return;
+  setTaskStatusForDate(t, yKey, 'finalizado');
+  if(employeePersona){
+    renderEmployeeView();
+  } else {
+    renderLists();
+    renderChecklist();
+  }
+  refreshCalendars();
+  refreshOpenCalDayModal();
+  await saveTeamTasks();
+}
+
 // Busca la fecha marcada como finalizada más reciente de una tarea recurrente, para poder deshacerla.
 function lastCompletedOccurrence(t){
   if(!t.statusDates) return null;
@@ -1739,7 +1564,7 @@ function renderLists(){
 
   const filtered = activeFilter==='todos' ? teamTasks : teamTasks.filter(t=>t.person===activeFilter);
   const todayStr = todayKey();
-  const pending = filtered.filter(t=>taskRepeatType(t)!=='none' || !isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
+  const pending = filtered.filter(t=>!isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
     const da = effectiveDueKey(a), db = effectiveDueKey(b);
     if(da && db){
       const cmp = da.localeCompare(db);
@@ -1750,7 +1575,7 @@ function renderLists(){
     if(db) return 1;
     return b.ts - a.ts;
   });
-  const resolved = filtered.filter(t=>taskRepeatType(t)==='none' && isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
+  const resolved = filtered.filter(t=>isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
 
   pendingEl.innerHTML = pending.length ? pending.map(teamTicketHtml).join('') :
     '<div class="empty">No hay pendientes acá. Buen momento para respirar.</div>';
@@ -1776,7 +1601,7 @@ function renderLists(){
     sel.addEventListener('change', async ()=>{
       const t = teamTasks.find(x=>x.id===sel.dataset.id);
       if(!t) return;
-      const dKey = nextRecurrence(t);
+      const dKey = currentOccurrenceKey(t);
       setTaskStatusForDate(t, dKey, sel.value);
       if(t.linkedPersonalTaskId){
         const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
@@ -1842,7 +1667,7 @@ function syncLinkedDoneStatus(a, b, dateStr){
 async function toggleTeamTaskResolved(id){
   const t = teamTasks.find(x=>x.id===id);
   if(!t) return;
-  const today = nextRecurrence(t);
+  const today = currentOccurrenceKey(t);
   toggleTaskDoneForDate(t, today);
   if(employeePersona){
     renderEmployeeView();
@@ -1952,35 +1777,16 @@ let checklistEditMode = false;
 const CHECKLIST_EDIT_MODE_KEY = 'control-bynina:checklist-edit-mode';
 
 function applyChecklistEditMode(){
-  const toggle = document.getElementById('checklist-edit-toggle');
-  if(checklistEditMode){
-    toggle.textContent = '✏️ Modo edición activo — tocá para cerrar';
-    toggle.classList.add('active');
-  } else {
-    toggle.textContent = '✏️ Editar checklist (orden, horarios, tareas)';
-    toggle.classList.remove('active');
-  }
-  renderChecklistEditor();
+  // Editor del checklist: funcionalidad retirada a pedido de Ariel (23/07).
 }
 
 async function toggleChecklistEditMode(){
-  checklistEditMode = !checklistEditMode;
-  applyChecklistEditMode();
-  try{
-    localStorage.setItem(CHECKLIST_EDIT_MODE_KEY, checklistEditMode ? 'true' : 'false');
-  }catch(e){}
+  // Editor del checklist: funcionalidad retirada a pedido de Ariel (23/07).
 }
 
 async function loadChecklistEditMode(){
-  try{
-    checklistEditMode = localStorage.getItem(CHECKLIST_EDIT_MODE_KEY) === 'true';
-  }catch(e){
-    checklistEditMode = false;
-  }
-  applyChecklistEditMode();
+  // Editor del checklist: funcionalidad retirada a pedido de Ariel (23/07).
 }
-
-document.getElementById('checklist-edit-toggle').addEventListener('click', toggleChecklistEditMode);
 
 async function loadPlan(){
   try{
@@ -2087,11 +1893,13 @@ function repeatBadgeHtml(t){
 
 function teamTicketHtml(t){
   const repType = taskRepeatType(t);
-  const done = repType!=='none' ? false : isTaskDoneForDate(t, todayKey());
+  const done = isTaskDoneForDate(t, todayKey());
   const dueLabel = repType!=='none' ? repeatBadgeHtml(t) : dueBadgeHtml(t.dueDate, done);
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn team-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   const undoBtn = (repType!=='none' && lastCompletedOccurrence(t)) ? `<button class="edit-btn task-undo" data-id="${t.id}" title="Deshacer última finalización">↩</button>` : '';
+  const yKey = repType!=='none' ? yesterdayKeyFor(t) : null;
+  const catchUpBtn = yKey ? `<button class="edit-btn" onclick="markYesterdayDone('${t.id}')" title="Marcar como hecha ayer, sin tocar hoy">✓ ayer</button>` : '';
   return `
     <div class="ticket ${done?'resolved':''}">
       <div class="ticket-check team-check" data-id="${t.id}">${done?'✓':''}</div>
@@ -2100,7 +1908,7 @@ function teamTicketHtml(t){
           <span class="tag ${t.person}">${PEOPLE[t.person] || t.person}</span>
           ${categoryTagHtml(t)}
           ${t.sharedWithMe?'<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Compartida conmigo</span>':''}
-          <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, nextRecurrence(t))}</select>
+          <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, currentOccurrenceKey(t))}</select>
           <span class="ticket-time">${fmtTime(t.ts)}</span>
           ${timeLabel}
           ${dueLabel}
@@ -2108,6 +1916,7 @@ function teamTicketHtml(t){
         <div class="ticket-text">${escapeHtml(t.text)}</div>
       </div>
       ${undoBtn}
+      ${catchUpBtn}
       ${postponeBtn}
       <button class="edit-btn team-edit" data-id="${t.id}" title="Editar">✎</button>
       <button class="del-btn team-del" data-id="${t.id}" title="Eliminar">×</button>
@@ -2117,16 +1926,19 @@ function teamTicketHtml(t){
 
 function teamTaskRowHtml(t){
   const repType = taskRepeatType(t);
-  const done = repType!=='none' ? false : isTaskDoneForDate(t, todayKey());
+  const done = isTaskDoneForDate(t, todayKey());
   const dueLabel = repType!=='none' ? repeatBadgeHtml(t) : dueBadgeHtml(t.dueDate, done);
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn team-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   const undoBtn = (repType!=='none' && lastCompletedOccurrence(t)) ? `<button class="edit-btn task-undo" data-id="${t.id}" title="Deshacer última finalización">↩</button>` : '';
+  const yKey = repType!=='none' ? yesterdayKeyFor(t) : null;
+  const catchUpBtn = yKey ? `<button class="edit-btn" onclick="markYesterdayDone('${t.id}')" title="Marcar como hecha ayer, sin tocar hoy">✓ ayer</button>` : '';
   return `
     <div class="check-item check-team-item">
       <div class="ticket-check team-check" data-id="${t.id}">${done?'✓':''}</div>
-      <label class="check-team-label">${categoryTagHtml(t)} <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, nextRecurrence(t))}</select> ${escapeHtml(t.text)} ${timeLabel} ${dueLabel}</label>
+      <label class="check-team-label">${categoryTagHtml(t)} <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, currentOccurrenceKey(t))}</select> ${escapeHtml(t.text)} ${timeLabel} ${dueLabel}</label>
       ${undoBtn}
+      ${catchUpBtn}
       ${postponeBtn}
       <button class="edit-btn team-edit" data-id="${t.id}" title="Editar">✎</button>
       <button class="del-btn team-del" data-id="${t.id}" title="Eliminar">×</button>
@@ -2137,24 +1949,27 @@ function teamTaskRowHtml(t){
 /* ===== Vista de empleado: solo sus tareas, sin editar/eliminar ===== */
 function employeeTicketHtml(t){
   const repType = taskRepeatType(t);
-  const done = repType!=='none' ? false : isTaskDoneForDate(t, todayKey());
+  const done = isTaskDoneForDate(t, todayKey());
   const dueLabel = repType!=='none' ? repeatBadgeHtml(t) : dueBadgeHtml(t.dueDate, done);
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn employee-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   const undoBtn = (repType!=='none' && lastCompletedOccurrence(t)) ? `<button class="edit-btn task-undo" data-id="${t.id}" title="Deshacer última finalización">↩</button>` : '';
+  const yKey = repType!=='none' ? yesterdayKeyFor(t) : null;
+  const catchUpBtn = yKey ? `<button class="edit-btn" onclick="markYesterdayDone('${t.id}')" title="Marcar como hecha ayer, sin tocar hoy">✓ ayer</button>` : '';
   return `
     <div class="ticket ${done?'resolved':''}">
       <div class="ticket-check employee-check" data-id="${t.id}">${done?'✓':''}</div>
       <div class="ticket-body">
         <div class="ticket-meta">
           ${categoryTagHtml(t)}
-          <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, nextRecurrence(t))}</select>
+          <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, currentOccurrenceKey(t))}</select>
           ${timeLabel}
           ${dueLabel}
         </div>
         <div class="ticket-text">${escapeHtml(t.text)}</div>
       </div>
       ${undoBtn}
+      ${catchUpBtn}
       ${postponeBtn}
       <button class="edit-btn employee-edit" data-id="${t.id}" title="Editar">✎</button>
     </div>
@@ -2190,19 +2005,9 @@ function renderEmployeeView(){
   document.getElementById('employee-name-title').textContent = `Hola, ${PEOPLE[employeePersona]}`;
   document.getElementById('employee-today').textContent = document.getElementById('today').textContent;
 
-  const checklistEl = document.getElementById('employee-checklist');
-  checklistEl.innerHTML = renderEmployeeChecklistSection();
-  checklistEl.querySelectorAll('input[type=checkbox]').forEach(cb=>{
-    cb.addEventListener('change', async ()=>{
-      const id = cb.id.replace('echk-','');
-      await saveChecklistItem(id, cb.checked);
-      renderEmployeeView();
-    });
-  });
-
   const mine = teamTasks.filter(t=>t.person===employeePersona);
   const todayStr = todayKey();
-  const pending = mine.filter(t=>taskRepeatType(t)!=='none' || !isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
+  const pending = mine.filter(t=>!isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
     const da = effectiveDueKey(a), db = effectiveDueKey(b);
     if(da && db){
       const cmp = da.localeCompare(db);
@@ -2213,7 +2018,7 @@ function renderEmployeeView(){
     if(db) return 1;
     return b.ts - a.ts;
   });
-  const resolved = mine.filter(t=>taskRepeatType(t)==='none' && isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
+  const resolved = mine.filter(t=>isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
 
   const pendingEl = document.getElementById('employee-pending-list');
   const resolvedEl = document.getElementById('employee-resolved-list');
@@ -2238,7 +2043,7 @@ function renderEmployeeView(){
     sel.addEventListener('change', async ()=>{
       const t = teamTasks.find(x=>x.id===sel.dataset.id);
       if(!t) return;
-      const dKey = nextRecurrence(t);
+      const dKey = currentOccurrenceKey(t);
       setTaskStatusForDate(t, dKey, sel.value);
       if(t.linkedPersonalTaskId){
         const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
@@ -2452,7 +2257,7 @@ function openEditTeamTask(id){
   if(!t) return;
   editingTeamTaskId = id;
   const calOpen = document.getElementById('cal-day-modal').classList.contains('open');
-  editingTeamTaskDateStr = (calOpen && calModalDateKey) ? calModalDateKey : nextRecurrence(t);
+  editingTeamTaskDateStr = (calOpen && calModalDateKey) ? calModalDateKey : currentOccurrenceKey(t);
   populateEditPersonSelect();
   document.getElementById('edit-task-person').value = t.person;
   document.getElementById('edit-task-category').innerHTML = categorySelectOptionsHtml(t.category || 'otro');
