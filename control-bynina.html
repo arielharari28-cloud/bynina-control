@@ -2910,6 +2910,7 @@ function renderSummaryNoDate(){
       <div class="summary-check" data-id="${t.id}"></div>
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
       ${responsableLabel}
+      <button class="edit-btn summary-edit-mine" data-id="${t.id}" title="Editar">✎</button>
     </div>
   `;
   }).join('');
@@ -2917,6 +2918,12 @@ function renderSummaryNoDate(){
     chk.addEventListener('click', (e)=>{
       e.stopPropagation();
       togglePersonalTaskResolved(chk.dataset.id);
+    });
+  });
+  el.querySelectorAll('.summary-edit-mine').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openEditPersonalTask(btn.dataset.id);
     });
   });
 }
@@ -2950,13 +2957,27 @@ function renderSummaryByEmployee(){
       <div class="tag summary-employee-name ${key}">${PEOPLE[key] || key} · ${list.length} pendiente${list.length===1?'':'s'}</div>
       ${list.map(t=>`
         <div class="summary-row">
+          <div class="summary-check team-summary-check" data-id="${t.id}"></div>
           ${categoryTagHtml(t)}
           <span class="summary-text">${escapeHtml(t.text)}</span>
           ${dueBadgeHtml(t.dueDate, false)}
+          <button class="edit-btn summary-edit-team" data-id="${t.id}" title="Editar">✎</button>
         </div>
       `).join('')}
     `;
   }).join('');
+  el.querySelectorAll('.team-summary-check').forEach(chk=>{
+    chk.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      toggleTeamTaskResolved(chk.dataset.id);
+    });
+  });
+  el.querySelectorAll('.summary-edit-team').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openEditTeamTask(btn.dataset.id);
+    });
+  });
 }
 
 // Bloque general: todo lo que tenés pendiente vos, sin importar la fecha (hoy, atrasado o futuro).
@@ -2993,6 +3014,7 @@ function renderSummaryMineAll(){
       ${responsableLabel}
       ${timeLabel}
       ${dueLabel}
+      <button class="edit-btn summary-edit-mine" data-id="${t.id}" title="Editar">✎</button>
     </div>
   `;
   }).join('');
@@ -3000,6 +3022,12 @@ function renderSummaryMineAll(){
     chk.addEventListener('click', (e)=>{
       e.stopPropagation();
       togglePersonalTaskResolved(chk.dataset.id);
+    });
+  });
+  el.querySelectorAll('.summary-edit-mine').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openEditPersonalTask(btn.dataset.id);
     });
   });
 }
