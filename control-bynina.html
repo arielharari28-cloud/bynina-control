@@ -919,28 +919,7 @@
       <button id="next-day">›</button>
     </div>
 
-    <div class="section-title st-green" id="summary-section-title">Resumen de tu día</div>
-    <div class="summary-columns">
-      <div class="summary-col">
-        <div class="summary-col-title">Mis tareas</div>
-        <div class="day-summary-card" id="day-summary-mine"></div>
-      </div>
-      <div class="summary-col">
-        <div class="summary-col-title">Tareas de mis empleados</div>
-        <div class="day-summary-card" id="day-summary-team"></div>
-      </div>
-    </div>
-
-    <div class="section-title st-purple">Pendientes sin fecha</div>
-    <div class="day-summary-card" id="summary-no-date"></div>
-
-    <div class="section-title st-rust">Pendientes por empleado</div>
-    <div class="day-summary-card" id="summary-by-employee"></div>
-
-    <div class="section-title st-green">Lo que tengo pendiente yo</div>
-    <div class="day-summary-card" id="summary-mine-all"></div>
-
-    <div class="section-title st-rust">Mis tareas</div>
+    <div class="section-title st-rust">Agregar tarea</div>
     <div class="capture">
       <div class="capture-row">
         <select id="task-area">
@@ -965,7 +944,27 @@
       </label>
     </div>
     <div class="filters" id="task-filters"></div>
-    <div id="task-list"></div>
+
+    <div class="section-title st-green" id="summary-section-title">Resumen de tu día</div>
+    <div class="summary-columns">
+      <div class="summary-col">
+        <div class="summary-col-title">Mis tareas</div>
+        <div class="day-summary-card" id="day-summary-mine"></div>
+      </div>
+      <div class="summary-col">
+        <div class="summary-col-title">Tareas de mis empleados</div>
+        <div class="day-summary-card" id="day-summary-team"></div>
+      </div>
+    </div>
+
+    <div class="section-title st-purple">Pendientes sin fecha</div>
+    <div class="day-summary-card" id="summary-no-date"></div>
+
+    <div class="section-title st-rust">Pendientes por empleado</div>
+    <div class="day-summary-card" id="summary-by-employee"></div>
+
+    <div class="section-title st-green">Lo que tengo pendiente yo</div>
+    <div class="day-summary-card" id="summary-mine-all"></div>
   </div>
 
   <div id="tab-calendario" class="tab-panel">
@@ -2363,7 +2362,7 @@ function renderTaskFilters(){
     c.addEventListener('click', ()=>{
       taskFilter = c.dataset.key;
       renderTaskFilters();
-      renderPersonalTasks();
+      renderDaySummary();
     });
   });
 }
@@ -2439,6 +2438,7 @@ function sortPersonalTaskGroup(arr){
 
 function renderPersonalTasks(){
   const el = document.getElementById('task-list');
+  if(!el){ renderDaySummary(); return; }
   const filtered = taskFilter==='todas' ? personalTasks : personalTasks.filter(t=>t.area===taskFilter);
   const todayStr = todayKey();
   const pending = filtered.filter(t=>!isTaskDoneForDate(t, todayStr));
@@ -2731,11 +2731,93 @@ function renderDaySummary(){
   renderSummaryMineAll();
 }
 
+// Botones de acción compartidos por los 3 bloques del resumen que muestran MIS tareas
+// (Mis tareas de hoy, Pendientes sin fecha, Lo que tengo pendiente yo).
+function personalActionButtonsHtml(t){
+  const repType = taskRepeatType(t);
+  const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn ptask-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
+  return `
+    <button class="edit-btn ptask-photo-btn" data-id="${t.id}" title="Agregar/cambiar foto">📷</button>
+    ${postponeBtn}
+    <button class="edit-btn summary-edit-mine" data-id="${t.id}" title="Editar">✎</button>
+    <button class="del-btn ptask-del" data-id="${t.id}" title="Eliminar">×</button>
+    <input type="file" accept="image/*" class="ptask-photo-input" data-id="${t.id}" style="display:none">
+  `;
+}
+
+function personalPhotoThumbHtml(t){
+  return t.photoUrl ? `<img class="ptask-photo" src="${t.photoUrl}" data-full="${t.photoUrl}">` : '';
+}
+
+function wirePersonalActionButtons(el){
+  el.querySelectorAll('.summary-edit-mine').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openEditPersonalTask(btn.dataset.id);
+    });
+  });
+  el.querySelectorAll('.ptask-postpone').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      postponePersonalTask(btn.dataset.id);
+    });
+  });
+  el.querySelectorAll('.ptask-del').forEach(btn=>{
+    btn.addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const pt = personalTasks.find(x=>x.id===id);
+      personalTasks = personalTasks.filter(x=>x.id!==id);
+      renderDaySummary();
+      await savePersonalTasks();
+      if(pt && pt.linkedTeamTaskId){
+        teamTasks = teamTasks.filter(x=>x.id!==pt.linkedTeamTaskId);
+        renderLists();
+        renderChecklist();
+        refreshCalendars();
+        await saveTeamTasks();
+      }
+    });
+  });
+  el.querySelectorAll('.ptask-photo-btn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const input = el.querySelector(`.ptask-photo-input[data-id="${btn.dataset.id}"]`);
+      if(input) input.click();
+    });
+  });
+  el.querySelectorAll('.ptask-photo-input').forEach(input=>{
+    input.addEventListener('change', async ()=>{
+      const file = input.files[0];
+      if(!file) return;
+      const t = personalTasks.find(x=>x.id===input.dataset.id);
+      if(!t) return;
+      setStatus('subiendo foto...');
+      try{
+        const url = await uploadToCloudinary(file);
+        t.photoUrl = url;
+        renderDaySummary();
+        await savePersonalTasks();
+        setStatus('foto guardada');
+      }catch(e){
+        setStatus('no se pudo subir la foto, probá de nuevo');
+      }
+    });
+  });
+  el.querySelectorAll('.ptask-photo').forEach(img=>{
+    img.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      window.open(img.dataset.full, '_blank');
+    });
+  });
+}
+
 function renderDaySummaryMine(){
   const el = document.getElementById('day-summary-mine');
   if(!el) return;
   const todayStr = dateKey(currentDate);
-  const dayTasks = (personalTasks||[]).filter(t => taskAppliesToDate(t, todayStr) && !isTaskDoneForDate(t, todayStr));
+  const base = taskFilter==='todas' ? (personalTasks||[]) : (personalTasks||[]).filter(t=>t.area===taskFilter);
+  const dayTasks = base.filter(t => taskAppliesToDate(t, todayStr) && !isTaskDoneForDate(t, todayStr));
   if(!dayTasks.length){
     el.innerHTML = '<div class="empty">Sin pendientes para este día.</div>';
     return;
@@ -2764,9 +2846,10 @@ function renderDaySummaryMine(){
       <div class="summary-check" data-id="${t.id}"></div>
       <span class="summary-time">${t.time}</span>
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
+      ${personalPhotoThumbHtml(t)}
       ${responsableLabel}
       ${overdueLabel(t)}
-      <button class="edit-btn summary-edit-mine" data-id="${t.id}" title="Editar">✎</button>
+      ${personalActionButtonsHtml(t)}
     </div>
   `;
   }).join('');
@@ -2780,9 +2863,10 @@ function renderDaySummaryMine(){
       <div class="summary-row draggable-row ${responsableName?'summary-row-shared':''}" draggable="true" data-id="${t.id}">
         <div class="summary-check" data-id="${t.id}"></div>
         <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
+        ${personalPhotoThumbHtml(t)}
         ${responsableLabel}
         ${pendingLabel(t)}
-        <button class="edit-btn summary-edit-mine" data-id="${t.id}" title="Editar">✎</button>
+        ${personalActionButtonsHtml(t)}
       </div>
     `;
     }).join('');
@@ -2796,12 +2880,7 @@ function renderDaySummaryMine(){
     });
   });
 
-  el.querySelectorAll('.summary-edit-mine').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      openEditPersonalTask(btn.dataset.id);
-    });
-  });
+  wirePersonalActionButtons(el);
 
   el.querySelectorAll('.draggable-row').forEach(row=>{
     row.addEventListener('dragstart', ()=>{
@@ -2895,7 +2974,8 @@ function renderDaySummaryTeam(){
 function renderSummaryNoDate(){
   const el = document.getElementById('summary-no-date');
   if(!el) return;
-  const list = (personalTasks||[])
+  const base = taskFilter==='todas' ? (personalTasks||[]) : (personalTasks||[]).filter(t=>t.area===taskFilter);
+  const list = base
     .filter(t => !t.dueDate && !isTaskDoneForDate(t, todayKey()))
     .sort((a,b)=>(a.order ?? a.ts) - (b.order ?? b.ts));
   if(!list.length){
@@ -2909,8 +2989,9 @@ function renderSummaryNoDate(){
     <div class="summary-row">
       <div class="summary-check" data-id="${t.id}"></div>
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
+      ${personalPhotoThumbHtml(t)}
       ${responsableLabel}
-      <button class="edit-btn summary-edit-mine" data-id="${t.id}" title="Editar">✎</button>
+      ${personalActionButtonsHtml(t)}
     </div>
   `;
   }).join('');
@@ -2920,12 +3001,7 @@ function renderSummaryNoDate(){
       togglePersonalTaskResolved(chk.dataset.id);
     });
   });
-  el.querySelectorAll('.summary-edit-mine').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      openEditPersonalTask(btn.dataset.id);
-    });
-  });
+  wirePersonalActionButtons(el);
 }
 
 // Bloque general: pendientes de cada empleado (todo lo que tiene abierto hoy), agrupado por persona.
@@ -2985,7 +3061,8 @@ function renderSummaryMineAll(){
   const el = document.getElementById('summary-mine-all');
   if(!el) return;
   const todayStr = todayKey();
-  const list = (personalTasks||[])
+  const base = taskFilter==='todas' ? (personalTasks||[]) : (personalTasks||[]).filter(t=>t.area===taskFilter);
+  const list = base
     .filter(t => !isTaskDoneForDate(t, todayStr))
     .sort((a,b)=>{
       const da = a.dueDate||'', db = b.dueDate||'';
@@ -3011,10 +3088,11 @@ function renderSummaryMineAll(){
     <div class="summary-row">
       <div class="summary-check" data-id="${t.id}"></div>
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
+      ${personalPhotoThumbHtml(t)}
       ${responsableLabel}
       ${timeLabel}
       ${dueLabel}
-      <button class="edit-btn summary-edit-mine" data-id="${t.id}" title="Editar">✎</button>
+      ${personalActionButtonsHtml(t)}
     </div>
   `;
   }).join('');
@@ -3024,12 +3102,7 @@ function renderSummaryMineAll(){
       togglePersonalTaskResolved(chk.dataset.id);
     });
   });
-  el.querySelectorAll('.summary-edit-mine').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      openEditPersonalTask(btn.dataset.id);
-    });
-  });
+  wirePersonalActionButtons(el);
 }
 
 async function reorderNoTimeTasks(dateStr, draggedId, targetId){
