@@ -1211,6 +1211,95 @@ const ACTIVE_PEOPLE = Object.fromEntries(
 );
 let activeFilter = 'todos';
 
+/* ===== Personas y sectores creados a mano por Ariel (se guardan en Firebase y quedan para siempre) ===== */
+let customPeople = {};
+let customCategories = {};
+
+function slugify(str){
+  return String(str).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || ('x'+Date.now());
+}
+
+async function loadCustomPeople(){
+  try{
+    const val = await fbGet('control_bynina/custom_people');
+    customPeople = val ? JSON.parse(val) : {};
+  }catch(e){ customPeople = {}; }
+  Object.entries(customPeople).forEach(([k,v])=>{
+    PEOPLE[k] = v;
+    ACTIVE_PEOPLE[k] = v;
+  });
+}
+async function saveCustomPeople(){
+  try{ await fbSet('control_bynina/custom_people', JSON.stringify(customPeople)); }catch(e){}
+}
+
+async function loadCustomCategories(){
+  try{
+    const val = await fbGet('control_bynina/custom_categories');
+    customCategories = val ? JSON.parse(val) : {};
+  }catch(e){ customCategories = {}; }
+  Object.entries(customCategories).forEach(([k,v])=>{
+    TASK_CATEGORIES[k] = v;
+    if(!TASK_CATEGORY_COLOR[k]) TASK_CATEGORY_COLOR[k] = '#5b4e9e';
+  });
+}
+async function saveCustomCategories(){
+  try{ await fbSet('control_bynina/custom_categories', JSON.stringify(customCategories)); }catch(e){}
+}
+
+function refreshAllPersonSelects(selectedKey){
+  const taskResp = document.getElementById('task-responsible');
+  if(taskResp) taskResp.innerHTML = ptaskResponsibleOptionsHtml(selectedKey !== undefined ? selectedKey : taskResp.value);
+  const editResp = document.getElementById('edit-ptask-responsible');
+  if(editResp) editResp.innerHTML = ptaskResponsibleOptionsHtml(selectedKey !== undefined ? selectedKey : editResp.value);
+  renderTeamPersonChips();
+  if(document.getElementById('edit-task-person')) populateEditPersonSelect();
+}
+
+function refreshAllCategorySelects(selectedKey){
+  const taskCat = document.getElementById('task-category');
+  if(taskCat) taskCat.innerHTML = categorySelectOptionsHtml(selectedKey !== undefined ? selectedKey : taskCat.value);
+  const editPtaskCat = document.getElementById('edit-ptask-category');
+  if(editPtaskCat) editPtaskCat.innerHTML = categorySelectOptionsHtml(selectedKey !== undefined ? selectedKey : editPtaskCat.value);
+  const editTaskCat = document.getElementById('edit-task-category');
+  if(editTaskCat) editTaskCat.innerHTML = categorySelectOptionsHtml(selectedKey !== undefined ? selectedKey : editTaskCat.value);
+  renderTeamCategoryChips();
+}
+
+async function createNewPerson(selectEl){
+  const previous = selectEl ? selectEl.value : '';
+  const name = prompt('Nombre de la nueva persona:');
+  if(!name || !name.trim()){
+    if(selectEl) selectEl.value = previous === '__new_person__' ? '' : previous;
+    return null;
+  }
+  const key = slugify(name);
+  customPeople[key] = name.trim();
+  PEOPLE[key] = name.trim();
+  ACTIVE_PEOPLE[key] = name.trim();
+  await saveCustomPeople();
+  refreshAllPersonSelects(key);
+  return key;
+}
+
+async function createNewCategory(selectEl){
+  const previous = selectEl ? selectEl.value : '';
+  const name = prompt('Nombre del nuevo sector:');
+  if(!name || !name.trim()){
+    if(selectEl) selectEl.value = previous === '__new_category__' ? 'otro' : previous;
+    return null;
+  }
+  const key = slugify(name);
+  customCategories[key] = name.trim();
+  TASK_CATEGORIES[key] = name.trim();
+  TASK_CATEGORY_COLOR[key] = '#5b4e9e';
+  await saveCustomCategories();
+  refreshAllCategorySelects(key);
+  return key;
+}
+
 /* ===== Tema de la tarea (Web / Diseño / Redes / Marketing / Otro) ===== */
 const TASK_CATEGORIES = {web:'Web', diseno:'Diseño', redes:'Redes', marketing:'Marketing', otro:'Otro'};
 const TASK_CATEGORY_COLOR = {web:'#5b4e9e', diseno:'#8b4a2b', redes:'#2f6b4f', marketing:'#7a3230', otro:'#847d70'};
@@ -1218,7 +1307,7 @@ const TASK_CATEGORY_COLOR = {web:'#5b4e9e', diseno:'#8b4a2b', redes:'#2f6b4f', m
 function categorySelectOptionsHtml(selected){
   return Object.entries(TASK_CATEGORIES).map(([k,v])=>
     `<option value="${k}" ${k===(selected||'otro')?'selected':''}>${v}</option>`
-  ).join('');
+  ).join('') + '<option value="__new_category__">+ Nuevo sector...</option>';
 }
 
 /* ===== Repetición flexible (ninguna / diaria / semanal / cada 15 días / mensual) ===== */
@@ -2003,10 +2092,12 @@ function renderTeamPersonChips(){
   if(!el) return;
   el.innerHTML = Object.entries(ACTIVE_PEOPLE).map(([k,v])=>
     `<div class="chip team-person-chip" data-person="${k}">${v}</div>`
-  ).join('');
+  ).join('') + `<div class="chip" id="team-person-new-chip">+ Nueva persona</div>`;
   el.querySelectorAll('.team-person-chip').forEach(chip=>{
     chip.addEventListener('click', ()=>{ chip.classList.toggle('active'); });
   });
+  const newChip = document.getElementById('team-person-new-chip');
+  if(newChip) newChip.addEventListener('click', ()=>createNewPerson(null));
 }
 
 let teamNewTaskCategory = 'otro';
@@ -2015,12 +2106,20 @@ function renderTeamCategoryChips(){
   if(!el) return;
   el.innerHTML = Object.entries(TASK_CATEGORIES).map(([k,v])=>
     `<div class="chip team-category-chip ${k===teamNewTaskCategory?'active':''}" data-category="${k}">${v}</div>`
-  ).join('');
+  ).join('') + `<div class="chip" id="team-category-new-chip">+ Nuevo sector</div>`;
   el.querySelectorAll('.team-category-chip').forEach(chip=>{
     chip.addEventListener('click', ()=>{
       teamNewTaskCategory = chip.dataset.category;
       renderTeamCategoryChips();
     });
+  });
+  const newChip = document.getElementById('team-category-new-chip');
+  if(newChip) newChip.addEventListener('click', async ()=>{
+    const key = await createNewCategory(null);
+    if(key){
+      teamNewTaskCategory = key;
+      renderTeamCategoryChips();
+    }
   });
 }
 
@@ -2159,7 +2258,8 @@ let editingTeamTaskDateStr = null;
 
 function populateEditPersonSelect(){
   const sel = document.getElementById('edit-task-person');
-  sel.innerHTML = Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('');
+  sel.innerHTML = Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('') +
+    '<option value="__new_person__">+ Nueva persona...</option>';
 }
 
 function openEditTeamTask(id){
@@ -2250,9 +2350,23 @@ document.getElementById('edit-task-save').addEventListener('click', saveEditTeam
 document.getElementById('edit-task-modal').addEventListener('click', (e)=>{
   if(e.target.id === 'edit-task-modal') closeEditTeamTask();
 });
+document.getElementById('edit-task-person').addEventListener('change', async (e)=>{
+  if(e.target.value === '__new_person__'){
+    const key = await createNewPerson(e.target);
+    if(key) e.target.value = key;
+  }
+});
+document.getElementById('edit-task-category').addEventListener('change', async (e)=>{
+  if(e.target.value === '__new_category__'){
+    const key = await createNewCategory(e.target);
+    if(key) e.target.value = key;
+  }
+});
 
 (async function init(){
   renderToday();
+  await loadCustomPeople();
+  await loadCustomCategories();
   renderFilters();
   renderTeamPersonChips();
   renderTeamCategoryChips();
@@ -2433,7 +2547,8 @@ function personalTaskHtml(t){
 function ptaskResponsibleOptionsHtml(selected){
   const opts = Object.entries(ACTIVE_PEOPLE).filter(([k])=>k!=='general');
   return '<option value="">Ari</option>' +
-    opts.map(([k,v])=>`<option value="${k}" ${k===selected?'selected':''}>${v}</option>`).join('');
+    opts.map(([k,v])=>`<option value="${k}" ${k===selected?'selected':''}>${v}</option>`).join('') +
+    '<option value="__new_person__">+ Nueva persona...</option>';
 }
 
 function personalTaskResponsibleName(t){
@@ -2667,6 +2782,16 @@ document.getElementById('task-text-input').addEventListener('keydown', (e)=>{
     addPersonalTask();
   }
 });
+document.getElementById('task-responsible').addEventListener('change', async (e)=>{
+  if(e.target.value === '__new_person__'){
+    await createNewPerson(e.target);
+  }
+});
+document.getElementById('task-category').addEventListener('change', async (e)=>{
+  if(e.target.value === '__new_category__'){
+    await createNewCategory(e.target);
+  }
+});
 
 let editingPersonalTaskId = null;
 
@@ -2760,6 +2885,16 @@ document.getElementById('edit-ptask-cancel').addEventListener('click', closeEdit
 document.getElementById('edit-ptask-save').addEventListener('click', saveEditPersonalTask);
 document.getElementById('edit-ptask-modal').addEventListener('click', (e)=>{
   if(e.target.id === 'edit-ptask-modal') closeEditPersonalTask();
+});
+document.getElementById('edit-ptask-responsible').addEventListener('change', async (e)=>{
+  if(e.target.value === '__new_person__'){
+    await createNewPerson(e.target);
+  }
+});
+document.getElementById('edit-ptask-category').addEventListener('change', async (e)=>{
+  if(e.target.value === '__new_category__'){
+    await createNewCategory(e.target);
+  }
 });
 
 let dragSummaryId = null;
@@ -3187,6 +3322,8 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
 (async function initMiDia(){
   document.getElementById('task-due-date').value = dateKey(new Date());
+  await loadCustomPeople();
+  await loadCustomCategories();
   document.getElementById('task-category').innerHTML = categorySelectOptionsHtml('otro');
   document.getElementById('task-responsible').innerHTML = ptaskResponsibleOptionsHtml('');
   renderDateHeader();
