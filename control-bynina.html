@@ -3150,27 +3150,26 @@ function renderDaySummaryMine(){
 function renderDaySummaryTeam(){
   const el = document.getElementById('day-summary-team');
   if(!el) return;
-  const todayStr = dateKey(currentDate);
-  const dayTasks = (teamTasks||[]).filter(t => taskAppliesToDate(t, todayStr) && !isTaskDoneForDate(t, todayStr));
+  const todayStr = todayKey();
+  const dayTasks = (teamTasks||[]).filter(t => !isTaskDoneForDate(t, todayStr));
   if(!dayTasks.length){
-    el.innerHTML = '<div class="empty">Tu equipo no tiene pendientes para este día.</div>';
+    el.innerHTML = '<div class="empty">Tu equipo no tiene pendientes ahora.</div>';
     return;
   }
   const withTime = dayTasks.filter(t=>t.time).sort((a,b)=>{
-    const cmp = (a.dueDate||'').localeCompare(b.dueDate||'');
+    const cmp = effectiveDueKey(a).localeCompare(effectiveDueKey(b));
     if(cmp !== 0) return cmp;
     return a.time.localeCompare(b.time);
   });
   const noTime = dayTasks.filter(t=>!t.time).sort((a,b)=>{
-    const cmp = (a.dueDate||'').localeCompare(b.dueDate||'');
+    const cmp = effectiveDueKey(a).localeCompare(effectiveDueKey(b));
     if(cmp !== 0) return cmp;
     return b.ts - a.ts;
   });
 
-  const overdueLabel = (t) => (t.dueDate && t.dueDate !== todayStr) ?
-    `<span class="due-badge overdue">atrasada · venció ${fmtDue(t.dueDate)}</span>` : '';
-  const pendingLabel = (t) => (t.dueDate && t.dueDate !== todayStr) ?
-    `<span class="due-badge">pendiente</span>` : '';
+  const dateLabel = (t) => taskRepeatType(t)!=='none' ? repeatBadgeHtml(t) :
+    ((t.dueDate && t.dueDate !== todayStr) ?
+      `<span class="due-badge overdue">atrasada · venció ${fmtDue(t.dueDate)}</span>` : '');
   const personTag = (t) => `<span class="tag ${t.person}">${PEOPLE[t.person] || t.person}</span>`;
 
   let html = withTime.map(t => `
@@ -3180,7 +3179,7 @@ function renderDaySummaryTeam(){
       ${personTag(t)}
       <span class="summary-text">${escapeHtml(t.text)}</span>
       ${importantBadgeHtml(t)}
-      ${overdueLabel(t)}
+      ${dateLabel(t)}
       <button class="edit-btn summary-edit-team" data-id="${t.id}" title="Editar">✎</button>
     </div>
   `).join('');
@@ -3193,7 +3192,7 @@ function renderDaySummaryTeam(){
         ${personTag(t)}
         <span class="summary-text">${escapeHtml(t.text)}</span>
         ${importantBadgeHtml(t)}
-        ${pendingLabel(t)}
+        ${dateLabel(t)}
         <button class="edit-btn summary-edit-team" data-id="${t.id}" title="Editar">✎</button>
       </div>
     `).join('');
