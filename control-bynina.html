@@ -925,6 +925,8 @@
 
     <div class="section-title st-rust">Agregar tarea</div>
     <div class="capture">
+      <div class="capture-label" style="margin-top:0;">Responsable(s) — opcional, elegí uno o varios</div>
+      <div class="filters" id="task-responsible-chips"></div>
       <div class="capture-row">
         <select id="task-area">
           <option value="nina">By Nina</option>
@@ -935,9 +937,6 @@
           <option value="personal">Personal</option>
         </select>
         <select id="task-category"></select>
-        <select id="task-responsible">
-          <option value="">Ari</option>
-        </select>
         <input type="date" id="task-due-date">
         <input type="time" id="task-time-input">
         <textarea id="task-text-input" placeholder="Qué tenés que hacer..."></textarea>
@@ -1118,10 +1117,8 @@
       <select id="edit-ptask-category"></select>
     </div>
     <div class="modal-field">
-      <label for="edit-ptask-responsible">Responsable</label>
-      <select id="edit-ptask-responsible">
-        <option value="">Ari</option>
-      </select>
+      <label>Responsable(s)</label>
+      <div class="filters" id="edit-ptask-responsible-chips"></div>
     </div>
     <div class="modal-field">
       <label for="edit-ptask-due">Vence</label>
@@ -1249,11 +1246,52 @@ async function saveCustomCategories(){
   try{ await fbSet('control_bynina/custom_categories', JSON.stringify(customCategories)); }catch(e){}
 }
 
+function responsibleChipsHtml(selectedKeys, newChipId){
+  const sel = selectedKeys || [];
+  const opts = Object.entries(ACTIVE_PEOPLE).filter(([k])=>k!=='general');
+  return opts.map(([k,v])=>
+    `<div class="chip ptask-resp-chip ${sel.includes(k)?'active':''}" data-person="${k}">${v}</div>`
+  ).join('') + `<div class="chip" id="${newChipId}">+ Nueva persona</div>`;
+}
+
+function getSelectedResponsibleChips(containerId){
+  const el = document.getElementById(containerId);
+  if(!el) return [];
+  return Array.from(el.querySelectorAll('.ptask-resp-chip.active')).map(c=>c.dataset.person);
+}
+
+function wireResponsibleChips(containerId, newChipId){
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  el.querySelectorAll('.ptask-resp-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{ chip.classList.toggle('active'); });
+  });
+  const newChip = document.getElementById(newChipId);
+  if(newChip) newChip.addEventListener('click', async ()=>{
+    const before = getSelectedResponsibleChips(containerId);
+    const key = await createNewPerson(null);
+    if(key){
+      el.innerHTML = responsibleChipsHtml([...before, key], newChipId);
+      wireResponsibleChips(containerId, newChipId);
+    }
+  });
+}
+
 function refreshAllPersonSelects(selectedKey){
-  const taskResp = document.getElementById('task-responsible');
-  if(taskResp) taskResp.innerHTML = ptaskResponsibleOptionsHtml(selectedKey !== undefined ? selectedKey : taskResp.value);
-  const editResp = document.getElementById('edit-ptask-responsible');
-  if(editResp) editResp.innerHTML = ptaskResponsibleOptionsHtml(selectedKey !== undefined ? selectedKey : editResp.value);
+  const taskRespChips = document.getElementById('task-responsible-chips');
+  if(taskRespChips){
+    const sel = getSelectedResponsibleChips('task-responsible-chips');
+    if(selectedKey !== undefined && !sel.includes(selectedKey)) sel.push(selectedKey);
+    taskRespChips.innerHTML = responsibleChipsHtml(sel, 'task-responsible-new-chip');
+    wireResponsibleChips('task-responsible-chips', 'task-responsible-new-chip');
+  }
+  const editRespChips = document.getElementById('edit-ptask-responsible-chips');
+  if(editRespChips){
+    const sel = getSelectedResponsibleChips('edit-ptask-responsible-chips');
+    if(selectedKey !== undefined && !sel.includes(selectedKey)) sel.push(selectedKey);
+    editRespChips.innerHTML = responsibleChipsHtml(sel, 'edit-ptask-responsible-new-chip');
+    wireResponsibleChips('edit-ptask-responsible-chips', 'edit-ptask-responsible-new-chip');
+  }
   renderTeamPersonChips();
   if(document.getElementById('edit-task-person')) populateEditPersonSelect();
 }
@@ -2544,18 +2582,13 @@ function personalTaskHtml(t){
   `;
 }
 
-function ptaskResponsibleOptionsHtml(selected){
-  const opts = Object.entries(ACTIVE_PEOPLE).filter(([k])=>k!=='general');
-  return '<option value="">Ari</option>' +
-    opts.map(([k,v])=>`<option value="${k}" ${k===selected?'selected':''}>${v}</option>`).join('') +
-    '<option value="__new_person__">+ Nueva persona...</option>';
-}
 
 function personalTaskResponsibleName(t){
-  if(t.responsiblePerson){
-    return PEOPLE[t.responsiblePerson] || t.responsiblePerson;
+  const people = getResponsiblePeople(t);
+  if(people.length){
+    return people.map(k=>PEOPLE[k] || k).join(', ');
   }
-  if(t.linkedTeamTaskId){
+  if(t.linkedTeamTaskId && !t.assignedViaResponsable){
     const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
     if(tt && tt.person && tt.person!=='general') return PEOPLE[tt.person] || tt.person;
   }
@@ -2679,28 +2712,43 @@ function renderPersonalTasks(){
 // tiene que verla en su propia vista (?persona=...), que lee de teamTasks. Antes esto
 // era solo una etiqueta visual y nunca llegaba a la vista del empleado; esta función
 // crea/actualiza/borra la tarea de equipo vinculada según corresponda.
+function getResponsiblePeople(t){
+  if(Array.isArray(t.responsiblePeople)) return t.responsiblePeople;
+  if(t.responsiblePerson) return [t.responsiblePerson];
+  return [];
+}
+
+// IDs de tareas de equipo creadas a partir de la asignación de responsable(s) de esta tarea
+// personal (no confundir con el vínculo inverso "compartida conmigo" de una sola tarea de equipo).
+function getAssignedTeamTaskIds(pt){
+  if(Array.isArray(pt.linkedTeamTaskIds)) return pt.linkedTeamTaskIds;
+  if(pt.linkedTeamTaskId && pt.assignedViaResponsable) return [pt.linkedTeamTaskId];
+  return [];
+}
+
 async function syncResponsibleToTeamTask(pt){
-  const person = pt.responsiblePerson || '';
-  if(person){
-    if(pt.linkedTeamTaskId && pt.assignedViaResponsable){
-      const tt = teamTasks.find(x=>x.id===pt.linkedTeamTaskId);
-      if(tt){
-        tt.person = person;
-        tt.text = pt.text;
-        tt.category = pt.category || 'otro';
-        tt.dueDate = pt.dueDate;
-        tt.time = pt.time;
-        tt.repeat = taskRepeatType(pt);
-        await saveTeamTasks();
-        renderLists();
-        renderChecklist();
-        refreshCalendars();
-      }
-      return;
-    }
-    if(!pt.linkedTeamTaskId){
+  const wasLegacySingleLink = !!(pt.linkedTeamTaskId && pt.assignedViaResponsable);
+  const people = getResponsiblePeople(pt);
+  const existingIds = getAssignedTeamTaskIds(pt);
+  const existingByPerson = {};
+  existingIds.forEach(id=>{
+    const tt = teamTasks.find(x=>x.id===id);
+    if(tt) existingByPerson[tt.person] = tt;
+  });
+  const newLinkedIds = [];
+  people.forEach(person=>{
+    let tt = existingByPerson[person];
+    if(tt){
+      tt.text = pt.text;
+      tt.category = pt.category || 'otro';
+      tt.dueDate = pt.dueDate;
+      tt.time = pt.time;
+      tt.repeat = taskRepeatType(pt);
+      newLinkedIds.push(tt.id);
+      delete existingByPerson[person];
+    } else {
       const newTeamTask = {
-        id: 't' + Date.now() + Math.random().toString(36).slice(2,7),
+        id: 't' + Date.now() + Math.random().toString(36).slice(2,7) + person,
         person: person,
         text: pt.text,
         category: pt.category || 'otro',
@@ -2713,32 +2761,34 @@ async function syncResponsibleToTeamTask(pt){
         linkedPersonalTaskId: pt.id
       };
       teamTasks.push(newTeamTask);
-      pt.linkedTeamTaskId = newTeamTask.id;
-      pt.assignedViaResponsable = true;
-      await saveTeamTasks();
-      await savePersonalTasks();
-      renderLists();
-      renderChecklist();
-      refreshCalendars();
+      newLinkedIds.push(newTeamTask.id);
     }
-  } else if(pt.linkedTeamTaskId && pt.assignedViaResponsable){
-    // Se sacó el responsable: la tarea de equipo se creó solo para esto, se elimina.
-    teamTasks = teamTasks.filter(x=>x.id!==pt.linkedTeamTaskId);
-    delete pt.linkedTeamTaskId;
-    delete pt.assignedViaResponsable;
-    await saveTeamTasks();
-    await savePersonalTasks();
-    renderLists();
-    renderChecklist();
-    refreshCalendars();
+  });
+  // Lo que quedó en existingByPerson ya no está entre los responsables elegidos: se elimina.
+  const removedIds = Object.values(existingByPerson).map(tt=>tt.id);
+  if(removedIds.length){
+    teamTasks = teamTasks.filter(t=>!removedIds.includes(t.id));
   }
+  pt.linkedTeamTaskIds = newLinkedIds;
+  pt.assignedViaResponsable = newLinkedIds.length > 0;
+  if(!newLinkedIds.length){
+    delete pt.linkedTeamTaskIds;
+    delete pt.assignedViaResponsable;
+  }
+  if(wasLegacySingleLink){
+    delete pt.linkedTeamTaskId;
+  }
+  await saveTeamTasks();
+  await savePersonalTasks();
+  renderLists();
+  renderChecklist();
+  refreshCalendars();
 }
 
 async function addPersonalTask(){
   const textEl = document.getElementById('task-text-input');
   const areaEl = document.getElementById('task-area');
   const categoryEl = document.getElementById('task-category');
-  const responsibleEl = document.getElementById('task-responsible');
   const dueEl = document.getElementById('task-due-date');
   const timeEl = document.getElementById('task-time-input');
   const repeatEl = document.getElementById('task-repeat-daily');
@@ -2751,7 +2801,7 @@ async function addPersonalTask(){
     id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
     area: areaEl.value,
     category: categoryEl.value || 'otro',
-    responsiblePerson: responsibleEl.value || '',
+    responsiblePeople: getSelectedResponsibleChips('task-responsible-chips'),
     text: text,
     dueDate: dueEl.value || '',
     time: timeEl.value || '',
@@ -2765,7 +2815,8 @@ async function addPersonalTask(){
   timeEl.value = '';
   repeatEl.checked = false;
   importantEl.checked = false;
-  responsibleEl.value = '';
+  document.getElementById('task-responsible-chips').innerHTML = responsibleChipsHtml([], 'task-responsible-new-chip');
+  wireResponsibleChips('task-responsible-chips', 'task-responsible-new-chip');
   categoryEl.value = 'otro';
   renderPersonalTasks();
   await savePersonalTasks();
@@ -2782,11 +2833,6 @@ document.getElementById('task-text-input').addEventListener('keydown', (e)=>{
     addPersonalTask();
   }
 });
-document.getElementById('task-responsible').addEventListener('change', async (e)=>{
-  if(e.target.value === '__new_person__'){
-    await createNewPerson(e.target);
-  }
-});
 document.getElementById('task-category').addEventListener('change', async (e)=>{
   if(e.target.value === '__new_category__'){
     await createNewCategory(e.target);
@@ -2801,7 +2847,8 @@ function openEditPersonalTask(id){
   editingPersonalTaskId = id;
   document.getElementById('edit-ptask-area').value = t.area;
   document.getElementById('edit-ptask-category').innerHTML = categorySelectOptionsHtml(t.category || 'otro');
-  document.getElementById('edit-ptask-responsible').innerHTML = ptaskResponsibleOptionsHtml(t.responsiblePerson || '');
+  document.getElementById('edit-ptask-responsible-chips').innerHTML = responsibleChipsHtml(getResponsiblePeople(t), 'edit-ptask-responsible-new-chip');
+  wireResponsibleChips('edit-ptask-responsible-chips', 'edit-ptask-responsible-new-chip');
   document.getElementById('edit-ptask-due').value = t.dueDate || '';
   document.getElementById('edit-ptask-time').value = t.time || '';
   document.getElementById('edit-ptask-text').value = t.text;
@@ -2822,10 +2869,18 @@ async function togglePersonalTaskResolved(id){
   toggleTaskDoneForDate(t, today);
   renderPersonalTasks();
   await savePersonalTasks();
-  if(t.linkedTeamTaskId){
-    const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
-    if(tt && isTaskDoneForDate(tt, today) !== isTaskDoneForDate(t, today)){
-      toggleTaskDoneForDate(tt, today);
+  const linkedIds = new Set(getAssignedTeamTaskIds(t));
+  if(t.linkedTeamTaskId && !t.assignedViaResponsable) linkedIds.add(t.linkedTeamTaskId);
+  if(linkedIds.size){
+    let changed = false;
+    linkedIds.forEach(ttId=>{
+      const tt = teamTasks.find(x=>x.id===ttId);
+      if(tt && isTaskDoneForDate(tt, today) !== isTaskDoneForDate(t, today)){
+        toggleTaskDoneForDate(tt, today);
+        changed = true;
+      }
+    });
+    if(changed){
       renderLists();
       renderChecklist();
       await saveTeamTasks();
@@ -2860,7 +2915,8 @@ async function saveEditPersonalTask(){
   t.text = newText;
   t.area = document.getElementById('edit-ptask-area').value;
   t.category = document.getElementById('edit-ptask-category').value || 'otro';
-  t.responsiblePerson = document.getElementById('edit-ptask-responsible').value || '';
+  t.responsiblePeople = getSelectedResponsibleChips('edit-ptask-responsible-chips');
+  delete t.responsiblePerson;
   t.dueDate = document.getElementById('edit-ptask-due').value || '';
   t.time = document.getElementById('edit-ptask-time').value || '';
   t.repeatDaily = document.getElementById('edit-ptask-repeat').checked;
@@ -2885,11 +2941,6 @@ document.getElementById('edit-ptask-cancel').addEventListener('click', closeEdit
 document.getElementById('edit-ptask-save').addEventListener('click', saveEditPersonalTask);
 document.getElementById('edit-ptask-modal').addEventListener('click', (e)=>{
   if(e.target.id === 'edit-ptask-modal') closeEditPersonalTask();
-});
-document.getElementById('edit-ptask-responsible').addEventListener('change', async (e)=>{
-  if(e.target.value === '__new_person__'){
-    await createNewPerson(e.target);
-  }
 });
 document.getElementById('edit-ptask-category').addEventListener('change', async (e)=>{
   if(e.target.value === '__new_category__'){
@@ -2946,12 +2997,16 @@ function wirePersonalActionButtons(el){
       personalTasks = personalTasks.filter(x=>x.id!==id);
       renderDaySummary();
       await savePersonalTasks();
-      if(pt && pt.linkedTeamTaskId){
-        teamTasks = teamTasks.filter(x=>x.id!==pt.linkedTeamTaskId);
-        renderLists();
-        renderChecklist();
-        refreshCalendars();
-        await saveTeamTasks();
+      if(pt){
+        const idsToRemove = new Set(getAssignedTeamTaskIds(pt));
+        if(pt.linkedTeamTaskId && !pt.assignedViaResponsable) idsToRemove.add(pt.linkedTeamTaskId);
+        if(idsToRemove.size){
+          teamTasks = teamTasks.filter(x=>!idsToRemove.has(x.id));
+          renderLists();
+          renderChecklist();
+          refreshCalendars();
+          await saveTeamTasks();
+        }
       }
     });
   });
@@ -3232,7 +3287,7 @@ function renderSummaryByEmployee(){
           ${categoryTagHtml(t)}
           <span class="summary-text">${escapeHtml(t.text)}</span>
           ${importantBadgeHtml(t)}
-          ${dueBadgeHtml(t.dueDate, false)}
+          ${taskRepeatType(t)!=='none' ? repeatBadgeHtml(t) : dueBadgeHtml(t.dueDate, false)}
           <button class="edit-btn summary-edit-team" data-id="${t.id}" title="Editar">✎</button>
         </div>
       `).join('')}
@@ -3330,7 +3385,8 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   await loadCustomPeople();
   await loadCustomCategories();
   document.getElementById('task-category').innerHTML = categorySelectOptionsHtml('otro');
-  document.getElementById('task-responsible').innerHTML = ptaskResponsibleOptionsHtml('');
+  document.getElementById('task-responsible-chips').innerHTML = responsibleChipsHtml([], 'task-responsible-new-chip');
+  wireResponsibleChips('task-responsible-chips', 'task-responsible-new-chip');
   renderDateHeader();
   renderTaskFilters();
   await loadPersonalTasks();
