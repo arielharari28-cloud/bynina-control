@@ -51,76 +51,6 @@
     font-size:13px;
     color:var(--ink-soft);
   }
-
-  /* Shared morning plan board */
-  .plan-board{
-    background:var(--purple);
-    border-radius:12px;
-    padding:16px 16px 14px 16px;
-    margin-bottom:20px;
-    color:#fff;
-  }
-  .plan-header{margin-bottom:12px;}
-  .plan-title{
-    font-family:'Poppins',sans-serif;
-    font-weight:600;
-    font-size:16px;
-  }
-  .plan-sub{
-    font-family:'Inter',sans-serif;
-    font-size:12px;
-    color:#d9d4ef;
-    margin-top:2px;
-  }
-  .plan-field{margin-bottom:10px;}
-  .plan-field label{
-    display:block;
-    font-family:'Poppins',sans-serif;
-    font-size:12px;
-    font-weight:600;
-    color:#efecfa;
-    margin-bottom:5px;
-  }
-  .plan-field textarea{
-    width:100%;
-    min-height:60px;
-    background:#fff;
-    color:var(--ink);
-    border:none;
-    border-radius:8px;
-  }
-  .plan-footer{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:10px;
-    flex-wrap:wrap;
-  }
-  .plan-updated{
-    font-family:'Inter',sans-serif;
-    font-size:12px;
-    color:#d9d4ef;
-  }
-  .plan-footer button{
-    background:#fff;
-    color:var(--purple);
-  }
-  .plan-field textarea[readonly]{
-    background:#f0eef7;
-    color:var(--ink);
-    cursor:default;
-  }
-  .plan-board.readonly .plan-footer button{display:none;}
-  .plan-toggle{
-    font-family:'Inter',sans-serif;
-    font-size:11px;
-    color:#c9c3e6;
-    text-align:right;
-    margin-top:8px;
-    cursor:pointer;
-    text-decoration:underline;
-  }
-
   /* Quick capture */
   .capture{
     background:var(--card);
@@ -855,6 +785,23 @@
   .tag.otros{background:#d9e9e9;color:#2c6b6b;}
 
   /* Resumen del día (Mi Día) */
+  .summary-columns{
+    display:flex;
+    gap:14px;
+    flex-wrap:wrap;
+    margin-bottom:4px;
+  }
+  .summary-col{
+    flex:1 1 260px;
+    min-width:240px;
+  }
+  .summary-col-title{
+    font-family:'Poppins',sans-serif;
+    font-size:12px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+  }
   .day-summary-card{
     background:var(--card);
     border:1px solid var(--line);
@@ -902,6 +849,14 @@
     color:var(--ink-soft);
     margin:10px 0 4px;
   }
+  .summary-employee-name.tag{
+    display:inline-block;
+    font-size:14px;
+    padding:5px 14px;
+    border-radius:14px;
+    margin:14px 0 8px;
+  }
+  .summary-employee-name:first-child{margin-top:0;}
   .draggable-row{cursor:grab;}
   .draggable-row:active{cursor:grabbing;}
   .draggable-row.dragging{opacity:.4;}
@@ -921,26 +876,6 @@
   </div>
 
   <div id="tab-control" class="tab-panel active">
-  <div class="plan-board" id="plan-board">
-    <div class="plan-header">
-      <div class="plan-title">Plan de mañana — corte y control</div>
-      <div class="plan-sub">Visible para todo el que abra este link</div>
-    </div>
-    <div class="plan-field">
-      <label for="plan-corte">Corte prioritario (Ari Chico / Ale)</label>
-      <textarea id="plan-corte" placeholder="Qué se corta mañana, en orden..."></textarea>
-    </div>
-    <div class="plan-field">
-      <label for="plan-noemi">Indicación para Noemi</label>
-      <textarea id="plan-noemi" placeholder="Qué controlar/contar mañana..."></textarea>
-    </div>
-    <div class="plan-footer">
-      <span class="plan-updated" id="plan-updated">sin actualizar todavía</span>
-      <button id="plan-save-btn">Guardar plan</button>
-    </div>
-    <div class="plan-toggle" id="plan-toggle">Soy Ariel — activar edición</div>
-  </div>
-
   <div class="section-title st-rust">Tareas rápidas para el equipo</div>
   <div class="capture team-capture">
     <div class="capture-label">Crear tarea puntual (les aparece a ellos)</div>
@@ -984,7 +919,25 @@
     </div>
 
     <div class="section-title st-green" id="summary-section-title">Resumen de tu día</div>
-    <div class="day-summary-card" id="day-summary"></div>
+    <div class="summary-columns">
+      <div class="summary-col">
+        <div class="summary-col-title">Mis tareas</div>
+        <div class="day-summary-card" id="day-summary-mine"></div>
+      </div>
+      <div class="summary-col">
+        <div class="summary-col-title">Tareas de mis empleados</div>
+        <div class="day-summary-card" id="day-summary-team"></div>
+      </div>
+    </div>
+
+    <div class="section-title st-purple">Pendientes sin fecha</div>
+    <div class="day-summary-card" id="summary-no-date"></div>
+
+    <div class="section-title st-rust">Pendientes por empleado</div>
+    <div class="day-summary-card" id="summary-by-employee"></div>
+
+    <div class="section-title st-green">Lo que tengo pendiente yo</div>
+    <div class="day-summary-card" id="summary-mine-all"></div>
 
     <div class="section-title st-rust">Mis tareas</div>
     <div class="capture">
@@ -1616,6 +1569,7 @@ function renderLists(){
       await saveTeamTasks();
     });
   });
+  renderDaySummary();
 }
 
 function escapeHtml(str){
@@ -1733,46 +1687,6 @@ function renderToday(){
   document.getElementById('today').textContent = s;
 }
 
-const PLAN_KEY = 'control-bynina:plan-manana';
-const EDIT_MODE_KEY = 'control-bynina:edit-mode';
-let editMode = false;
-
-function applyEditMode(){
-  const board = document.getElementById('plan-board');
-  const corte = document.getElementById('plan-corte');
-  const noemi = document.getElementById('plan-noemi');
-  if(editMode){
-    board.classList.remove('readonly');
-    corte.removeAttribute('readonly');
-    noemi.removeAttribute('readonly');
-    document.getElementById('plan-toggle').textContent = 'Modo edición activo — tocar para volver a solo lectura';
-  }else{
-    board.classList.add('readonly');
-    corte.setAttribute('readonly','true');
-    noemi.setAttribute('readonly','true');
-    document.getElementById('plan-toggle').textContent = 'Soy Ariel — activar edición';
-  }
-}
-
-async function toggleEditMode(){
-  editMode = !editMode;
-  applyEditMode();
-  try{
-    localStorage.setItem(EDIT_MODE_KEY, editMode ? 'true' : 'false');
-  }catch(e){}
-}
-
-async function loadEditMode(){
-  try{
-    editMode = localStorage.getItem(EDIT_MODE_KEY) === 'true';
-  }catch(e){
-    editMode = false;
-  }
-  applyEditMode();
-}
-
-document.getElementById('plan-toggle').addEventListener('click', toggleEditMode);
-
 let checklistEditMode = false;
 const CHECKLIST_EDIT_MODE_KEY = 'control-bynina:checklist-edit-mode';
 
@@ -1788,38 +1702,6 @@ async function loadChecklistEditMode(){
   // Editor del checklist: funcionalidad retirada a pedido de Ariel (23/07).
 }
 
-async function loadPlan(){
-  try{
-    const val = await fbGet('control_bynina/plan_manana');
-    if(val){
-      const data = JSON.parse(val);
-      document.getElementById('plan-corte').value = data.corte || '';
-      document.getElementById('plan-noemi').value = data.noemi || '';
-      document.getElementById('plan-updated').textContent = data.ts ? ('última actualización ' + fmtTime(data.ts)) : 'sin actualizar todavía';
-    }
-  }catch(e){
-    // no plan saved yet
-  }
-}
-
-async function savePlan(){
-  const btn = document.getElementById('plan-save-btn');
-  btn.disabled = true;
-  const data = {
-    corte: document.getElementById('plan-corte').value.trim(),
-    noemi: document.getElementById('plan-noemi').value.trim(),
-    ts: Date.now()
-  };
-  try{
-    await fbSet('control_bynina/plan_manana', JSON.stringify(data));
-    document.getElementById('plan-updated').textContent = 'última actualización ' + fmtTime(data.ts);
-  }catch(e){
-    document.getElementById('plan-updated').textContent = 'error al guardar, probá de nuevo';
-  }
-  btn.disabled = false;
-}
-
-document.getElementById('plan-save-btn').addEventListener('click', savePlan);
 
 const TEAM_TASKS_KEY = 'control-bynina:team-tasks';
 let teamTasks = [];
@@ -2347,8 +2229,6 @@ document.getElementById('edit-task-modal').addEventListener('click', (e)=>{
   document.getElementById('team-repeat').innerHTML = repeatSelectOptionsHtml('none');
   document.getElementById('team-due-date').value = todayKey();
   setStatus('cargando...');
-  await loadPlan();
-  await loadEditMode();
   await loadChecklistEditMode();
   await loadChecklistConfig();
   await loadChecklist();
@@ -2843,7 +2723,15 @@ document.getElementById('edit-ptask-modal').addEventListener('click', (e)=>{
 let dragSummaryId = null;
 
 function renderDaySummary(){
-  const el = document.getElementById('day-summary');
+  renderDaySummaryMine();
+  renderDaySummaryTeam();
+  renderSummaryNoDate();
+  renderSummaryByEmployee();
+  renderSummaryMineAll();
+}
+
+function renderDaySummaryMine(){
+  const el = document.getElementById('day-summary-mine');
   if(!el) return;
   const todayStr = dateKey(currentDate);
   const dayTasks = (personalTasks||[]).filter(t => taskAppliesToDate(t, todayStr) && !isTaskDoneForDate(t, todayStr));
@@ -2922,6 +2810,169 @@ function renderDaySummary(){
       const targetId = row.dataset.id;
       if(!dragSummaryId || dragSummaryId === targetId) return;
       await reorderNoTimeTasks(todayStr, dragSummaryId, targetId);
+    });
+  });
+}
+
+// Tareas del equipo (teamTasks) que corresponden al día que estás mirando en Mi Día,
+// ordenadas por horario — es la columna hermana de "Mis tareas".
+function renderDaySummaryTeam(){
+  const el = document.getElementById('day-summary-team');
+  if(!el) return;
+  const todayStr = dateKey(currentDate);
+  const dayTasks = (teamTasks||[]).filter(t => taskAppliesToDate(t, todayStr) && !isTaskDoneForDate(t, todayStr));
+  if(!dayTasks.length){
+    el.innerHTML = '<div class="empty">Tu equipo no tiene pendientes para este día.</div>';
+    return;
+  }
+  const withTime = dayTasks.filter(t=>t.time).sort((a,b)=>{
+    const cmp = (a.dueDate||'').localeCompare(b.dueDate||'');
+    if(cmp !== 0) return cmp;
+    return a.time.localeCompare(b.time);
+  });
+  const noTime = dayTasks.filter(t=>!t.time).sort((a,b)=>{
+    const cmp = (a.dueDate||'').localeCompare(b.dueDate||'');
+    if(cmp !== 0) return cmp;
+    return b.ts - a.ts;
+  });
+
+  const overdueLabel = (t) => (t.dueDate && t.dueDate !== todayStr) ?
+    `<span class="due-badge overdue">atrasada · venció ${fmtDue(t.dueDate)}</span>` : '';
+  const pendingLabel = (t) => (t.dueDate && t.dueDate !== todayStr) ?
+    `<span class="due-badge">pendiente</span>` : '';
+  const personTag = (t) => `<span class="tag ${t.person}">${PEOPLE[t.person] || t.person}</span>`;
+
+  let html = withTime.map(t => `
+    <div class="summary-row">
+      <span class="summary-time">${t.time}</span>
+      ${personTag(t)}
+      <span class="summary-text">${escapeHtml(t.text)}</span>
+      ${overdueLabel(t)}
+    </div>
+  `).join('');
+
+  if(noTime.length){
+    html += `<div class="summary-subtitle">Sin horario fijo</div>`;
+    html += noTime.map(t => `
+      <div class="summary-row">
+        ${personTag(t)}
+        <span class="summary-text">${escapeHtml(t.text)}</span>
+        ${pendingLabel(t)}
+      </div>
+    `).join('');
+  }
+  el.innerHTML = html;
+}
+
+// Bloque general (no depende del día que estés mirando): tus tareas propias sin fecha asignada.
+function renderSummaryNoDate(){
+  const el = document.getElementById('summary-no-date');
+  if(!el) return;
+  const list = (personalTasks||[])
+    .filter(t => !t.dueDate && !isTaskDoneForDate(t, todayKey()))
+    .sort((a,b)=>(a.order ?? a.ts) - (b.order ?? b.ts));
+  if(!list.length){
+    el.innerHTML = '<div class="empty">No tenés pendientes sin fecha.</div>';
+    return;
+  }
+  el.innerHTML = list.map(t => {
+    const responsableName = personalTaskResponsibleName(t);
+    const responsableLabel = responsableName ? `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(responsableName)}</span>` : '';
+    return `
+    <div class="summary-row">
+      <div class="summary-check" data-id="${t.id}"></div>
+      <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
+      ${responsableLabel}
+    </div>
+  `;
+  }).join('');
+  el.querySelectorAll('.summary-check').forEach(chk=>{
+    chk.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      togglePersonalTaskResolved(chk.dataset.id);
+    });
+  });
+}
+
+// Bloque general: pendientes de cada empleado (todo lo que tiene abierto hoy), agrupado por persona.
+function renderSummaryByEmployee(){
+  const el = document.getElementById('summary-by-employee');
+  if(!el) return;
+  const todayStr = todayKey();
+  const pendingAll = (teamTasks||[]).filter(t => !isTaskDoneForDate(t, todayStr));
+  if(!pendingAll.length){
+    el.innerHTML = '<div class="empty">Tu equipo no tiene pendientes ahora.</div>';
+    return;
+  }
+  const byPerson = {};
+  pendingAll.forEach(t=>{
+    const key = t.person || 'general';
+    if(!byPerson[key]) byPerson[key] = [];
+    byPerson[key].push(t);
+  });
+  const order = Object.keys(byPerson).sort((a,b)=>(PEOPLE[a]||a).localeCompare(PEOPLE[b]||b));
+  el.innerHTML = order.map(key=>{
+    const list = byPerson[key].sort((a,b)=>{
+      const da = effectiveDueKey(a), db = effectiveDueKey(b);
+      if(da && db) return da.localeCompare(db);
+      if(da) return -1;
+      if(db) return 1;
+      return b.ts - a.ts;
+    });
+    return `
+      <div class="tag summary-employee-name ${key}">${PEOPLE[key] || key} · ${list.length} pendiente${list.length===1?'':'s'}</div>
+      ${list.map(t=>`
+        <div class="summary-row">
+          ${categoryTagHtml(t)}
+          <span class="summary-text">${escapeHtml(t.text)}</span>
+          ${dueBadgeHtml(t.dueDate, false)}
+        </div>
+      `).join('')}
+    `;
+  }).join('');
+}
+
+// Bloque general: todo lo que tenés pendiente vos, sin importar la fecha (hoy, atrasado o futuro).
+function renderSummaryMineAll(){
+  const el = document.getElementById('summary-mine-all');
+  if(!el) return;
+  const todayStr = todayKey();
+  const list = (personalTasks||[])
+    .filter(t => !isTaskDoneForDate(t, todayStr))
+    .sort((a,b)=>{
+      const da = a.dueDate||'', db = b.dueDate||'';
+      if(da && db){
+        const cmp = da.localeCompare(db);
+        if(cmp !== 0) return cmp;
+        return (a.time||'').localeCompare(b.time||'');
+      }
+      if(da) return -1;
+      if(db) return 1;
+      return (a.order ?? a.ts) - (b.order ?? b.ts);
+    });
+  if(!list.length){
+    el.innerHTML = '<div class="empty">No tenés pendientes.</div>';
+    return;
+  }
+  el.innerHTML = list.map(t=>{
+    const responsableName = personalTaskResponsibleName(t);
+    const responsableLabel = responsableName ? `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(responsableName)}</span>` : '';
+    const dueLabel = t.dueDate ? dueBadgeHtml(t.dueDate, false) : '';
+    const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
+    return `
+    <div class="summary-row">
+      <div class="summary-check" data-id="${t.id}"></div>
+      <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
+      ${responsableLabel}
+      ${timeLabel}
+      ${dueLabel}
+    </div>
+  `;
+  }).join('');
+  el.querySelectorAll('.summary-check').forEach(chk=>{
+    chk.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      togglePersonalTaskResolved(chk.dataset.id);
     });
   });
 }
