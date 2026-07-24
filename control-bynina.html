@@ -817,6 +817,7 @@
     border-bottom:1px solid var(--line);
     flex-wrap:wrap;
   }
+  .summary-row .edit-btn{align-self:center;}
   .summary-check{
     flex:0 0 auto;
     width:18px;
@@ -2765,6 +2766,7 @@ function renderDaySummaryMine(){
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
       ${responsableLabel}
       ${overdueLabel(t)}
+      <button class="edit-btn summary-edit-mine" data-id="${t.id}" title="Editar">✎</button>
     </div>
   `;
   }).join('');
@@ -2780,6 +2782,7 @@ function renderDaySummaryMine(){
         <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
         ${responsableLabel}
         ${pendingLabel(t)}
+        <button class="edit-btn summary-edit-mine" data-id="${t.id}" title="Editar">✎</button>
       </div>
     `;
     }).join('');
@@ -2790,6 +2793,13 @@ function renderDaySummaryMine(){
     chk.addEventListener('click', (e)=>{
       e.stopPropagation();
       togglePersonalTaskResolved(chk.dataset.id);
+    });
+  });
+
+  el.querySelectorAll('.summary-edit-mine').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openEditPersonalTask(btn.dataset.id);
     });
   });
 
@@ -2844,10 +2854,12 @@ function renderDaySummaryTeam(){
 
   let html = withTime.map(t => `
     <div class="summary-row">
+      <div class="summary-check team-summary-check" data-id="${t.id}"></div>
       <span class="summary-time">${t.time}</span>
       ${personTag(t)}
       <span class="summary-text">${escapeHtml(t.text)}</span>
       ${overdueLabel(t)}
+      <button class="edit-btn summary-edit-team" data-id="${t.id}" title="Editar">✎</button>
     </div>
   `).join('');
 
@@ -2855,13 +2867,28 @@ function renderDaySummaryTeam(){
     html += `<div class="summary-subtitle">Sin horario fijo</div>`;
     html += noTime.map(t => `
       <div class="summary-row">
+        <div class="summary-check team-summary-check" data-id="${t.id}"></div>
         ${personTag(t)}
         <span class="summary-text">${escapeHtml(t.text)}</span>
         ${pendingLabel(t)}
+        <button class="edit-btn summary-edit-team" data-id="${t.id}" title="Editar">✎</button>
       </div>
     `).join('');
   }
   el.innerHTML = html;
+
+  el.querySelectorAll('.team-summary-check').forEach(chk=>{
+    chk.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      toggleTeamTaskResolved(chk.dataset.id);
+    });
+  });
+  el.querySelectorAll('.summary-edit-team').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openEditTeamTask(btn.dataset.id);
+    });
+  });
 }
 
 // Bloque general (no depende del día que estés mirando): tus tareas propias sin fecha asignada.
