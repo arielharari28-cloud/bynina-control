@@ -895,6 +895,10 @@
       <input type="checkbox" id="team-involve-me">
       Estoy involucrado — me figura en Mi Día y en el Calendario como "Responsable: [persona]"
     </label>
+    <label class="check-row">
+      <input type="checkbox" id="team-important">
+      ⭐ Importante
+    </label>
   </div>
 
   <div class="filters" id="filters"></div>
@@ -930,6 +934,7 @@
           <option value="otros">Otros clientes</option>
           <option value="personal">Personal</option>
         </select>
+        <select id="task-category"></select>
         <select id="task-responsible">
           <option value="">Ari</option>
         </select>
@@ -941,6 +946,10 @@
       <label class="check-row">
         <input type="checkbox" id="task-repeat-daily">
         🔁 Se repite todos los días
+      </label>
+      <label class="check-row">
+        <input type="checkbox" id="task-important">
+        ⭐ Importante
       </label>
     </div>
     <div class="filters" id="task-filters"></div>
@@ -1077,6 +1086,12 @@
         Compartida conmigo (me figura en Mi Día y en el Calendario como "Responsable: [persona]")
       </label>
     </div>
+    <div class="modal-field">
+      <label class="check-row" style="margin:0;">
+        <input type="checkbox" id="edit-task-important">
+        ⭐ Importante
+      </label>
+    </div>
     <div class="modal-footer">
       <button class="modal-cancel-btn" id="edit-task-cancel">Cancelar</button>
       <button id="edit-task-save">Guardar</button>
@@ -1099,6 +1114,10 @@
       </select>
     </div>
     <div class="modal-field">
+      <label for="edit-ptask-category">Sector</label>
+      <select id="edit-ptask-category"></select>
+    </div>
+    <div class="modal-field">
       <label for="edit-ptask-responsible">Responsable</label>
       <select id="edit-ptask-responsible">
         <option value="">Ari</option>
@@ -1119,6 +1138,10 @@
     <label class="check-row">
       <input type="checkbox" id="edit-ptask-repeat">
       🔁 Se repite todos los días
+    </label>
+    <label class="check-row">
+      <input type="checkbox" id="edit-ptask-important">
+      ⭐ Importante
     </label>
     <div class="modal-footer">
       <button class="modal-cancel-btn" id="edit-ptask-cancel">Cancelar</button>
@@ -1604,6 +1627,7 @@ function pushPersonalFieldsToTeam(pt){
   const t = teamTasks.find(x=>x.id===pt.linkedTeamTaskId);
   if(!t) return null;
   t.text = pt.text;
+  t.category = pt.category || 'otro';
   t.dueDate = pt.dueDate;
   t.time = pt.time;
   return t;
@@ -2006,6 +2030,7 @@ async function addTeamTask(){
   const timeEl = document.getElementById('team-time-input');
   const involveEl = document.getElementById('team-involve-me');
   const repeatEl = document.getElementById('team-repeat');
+  const importantEl = document.getElementById('team-important');
   const text = textEl.value.trim();
   if(!text) return;
   let selectedPeople = Array.from(document.querySelectorAll('.team-person-chip.active')).map(c=>c.dataset.person);
@@ -2015,6 +2040,7 @@ async function addTeamTask(){
   const dueDate = dueEl.value || '';
   const time = timeEl.value || '';
   const involveMe = involveEl.checked;
+  const important = importantEl.checked;
   const repeat = repeatEl.value || 'none';
   const category = teamNewTaskCategory;
   const newTasks = selectedPeople.map(person => ({
@@ -2026,7 +2052,8 @@ async function addTeamTask(){
     time: time,
     ts: Date.now(),
     resolved: false,
-    repeat: repeat
+    repeat: repeat,
+    important: important
   }));
   newTasks.forEach(t => teamTasks.push(t));
   textEl.value = '';
@@ -2045,6 +2072,7 @@ async function addTeamTask(){
     setStatus('guardado y agregado a tu día');
   }
   involveEl.checked = false;
+  importantEl.checked = false;
   repeatEl.value = 'none';
   btn.disabled = false;
   textEl.focus();
@@ -2149,6 +2177,7 @@ function openEditTeamTask(id){
   document.getElementById('edit-task-status').innerHTML = taskStatusSelectHtml(t, editingTeamTaskDateStr);
   document.getElementById('edit-task-repeat').innerHTML = repeatSelectOptionsHtml(taskRepeatType(t));
   document.getElementById('edit-task-shared').checked = !!t.sharedWithMe;
+  document.getElementById('edit-task-important').checked = !!t.important;
   document.getElementById('edit-task-person-field').style.display = employeePersona ? 'none' : '';
   document.getElementById('edit-task-shared-field').style.display = employeePersona ? 'none' : '';
   document.getElementById('edit-task-modal').classList.add('open');
@@ -2172,6 +2201,7 @@ async function saveEditTeamTask(){
   t.dueDate = newDueDate;
   t.time = document.getElementById('edit-task-time').value || '';
   t.repeat = document.getElementById('edit-task-repeat').value;
+  t.important = document.getElementById('edit-task-important').checked;
   delete t.repeatDaily;
   if(dueDateChanged && taskRepeatType(t) !== 'none'){
     // Cambió el ancla de la repetición: el historial de "finalizado" viejo ya no aplica,
@@ -2542,6 +2572,7 @@ async function syncResponsibleToTeamTask(pt){
       if(tt){
         tt.person = person;
         tt.text = pt.text;
+        tt.category = pt.category || 'otro';
         tt.dueDate = pt.dueDate;
         tt.time = pt.time;
         tt.repeat = taskRepeatType(pt);
@@ -2557,7 +2588,7 @@ async function syncResponsibleToTeamTask(pt){
         id: 't' + Date.now() + Math.random().toString(36).slice(2,7),
         person: person,
         text: pt.text,
-        category: 'otro',
+        category: pt.category || 'otro',
         dueDate: pt.dueDate,
         time: pt.time,
         ts: Date.now(),
@@ -2591,10 +2622,12 @@ async function syncResponsibleToTeamTask(pt){
 async function addPersonalTask(){
   const textEl = document.getElementById('task-text-input');
   const areaEl = document.getElementById('task-area');
+  const categoryEl = document.getElementById('task-category');
   const responsibleEl = document.getElementById('task-responsible');
   const dueEl = document.getElementById('task-due-date');
   const timeEl = document.getElementById('task-time-input');
   const repeatEl = document.getElementById('task-repeat-daily');
+  const importantEl = document.getElementById('task-important');
   const text = textEl.value.trim();
   if(!text) return;
   const btn = document.getElementById('task-add-btn');
@@ -2602,19 +2635,23 @@ async function addPersonalTask(){
   const newTask = {
     id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
     area: areaEl.value,
+    category: categoryEl.value || 'otro',
     responsiblePerson: responsibleEl.value || '',
     text: text,
     dueDate: dueEl.value || '',
     time: timeEl.value || '',
     ts: Date.now(),
     resolved: false,
-    repeatDaily: repeatEl.checked
+    repeatDaily: repeatEl.checked,
+    important: importantEl.checked
   };
   personalTasks.push(newTask);
   textEl.value = '';
   timeEl.value = '';
   repeatEl.checked = false;
+  importantEl.checked = false;
   responsibleEl.value = '';
+  categoryEl.value = 'otro';
   renderPersonalTasks();
   await savePersonalTasks();
   await syncResponsibleToTeamTask(newTask);
@@ -2638,11 +2675,13 @@ function openEditPersonalTask(id){
   if(!t) return;
   editingPersonalTaskId = id;
   document.getElementById('edit-ptask-area').value = t.area;
+  document.getElementById('edit-ptask-category').innerHTML = categorySelectOptionsHtml(t.category || 'otro');
   document.getElementById('edit-ptask-responsible').innerHTML = ptaskResponsibleOptionsHtml(t.responsiblePerson || '');
   document.getElementById('edit-ptask-due').value = t.dueDate || '';
   document.getElementById('edit-ptask-time').value = t.time || '';
   document.getElementById('edit-ptask-text').value = t.text;
   document.getElementById('edit-ptask-repeat').checked = !!t.repeatDaily;
+  document.getElementById('edit-ptask-important').checked = !!t.important;
   document.getElementById('edit-ptask-modal').classList.add('open');
 }
 
@@ -2695,10 +2734,12 @@ async function saveEditPersonalTask(){
   if(!newText) return;
   t.text = newText;
   t.area = document.getElementById('edit-ptask-area').value;
+  t.category = document.getElementById('edit-ptask-category').value || 'otro';
   t.responsiblePerson = document.getElementById('edit-ptask-responsible').value || '';
   t.dueDate = document.getElementById('edit-ptask-due').value || '';
   t.time = document.getElementById('edit-ptask-time').value || '';
   t.repeatDaily = document.getElementById('edit-ptask-repeat').checked;
+  t.important = document.getElementById('edit-ptask-important').checked;
   closeEditPersonalTask();
   renderPersonalTasks();
   await savePersonalTasks();
@@ -2812,12 +2853,21 @@ function wirePersonalActionButtons(el){
   });
 }
 
+// Una tarea personal con responsable asignado (a otra persona) es en realidad trabajo de un
+// empleado que Ariel solo está siguiendo — no cuenta como "mía" en los bloques de "Mis tareas".
+function isMyOwnTask(t){
+  return !personalTaskResponsibleName(t);
+}
+function importantBadgeHtml(t){
+  return t.important ? '<span class="due-badge soon">⭐ Importante</span>' : '';
+}
+
 function renderDaySummaryMine(){
   const el = document.getElementById('day-summary-mine');
   if(!el) return;
   const todayStr = dateKey(currentDate);
   const base = taskFilter==='todas' ? (personalTasks||[]) : (personalTasks||[]).filter(t=>t.area===taskFilter);
-  const dayTasks = base.filter(t => taskAppliesToDate(t, todayStr) && !isTaskDoneForDate(t, todayStr));
+  const dayTasks = base.filter(t => isMyOwnTask(t) && taskAppliesToDate(t, todayStr) && !isTaskDoneForDate(t, todayStr));
   if(!dayTasks.length){
     el.innerHTML = '<div class="empty">Sin pendientes para este día.</div>';
     return;
@@ -2848,6 +2898,7 @@ function renderDaySummaryMine(){
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
       ${personalPhotoThumbHtml(t)}
       ${responsableLabel}
+      ${importantBadgeHtml(t)}
       ${overdueLabel(t)}
       ${personalActionButtonsHtml(t)}
     </div>
@@ -2865,6 +2916,7 @@ function renderDaySummaryMine(){
         <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
         ${personalPhotoThumbHtml(t)}
         ${responsableLabel}
+        ${importantBadgeHtml(t)}
         ${pendingLabel(t)}
         ${personalActionButtonsHtml(t)}
       </div>
@@ -2937,6 +2989,7 @@ function renderDaySummaryTeam(){
       <span class="summary-time">${t.time}</span>
       ${personTag(t)}
       <span class="summary-text">${escapeHtml(t.text)}</span>
+      ${importantBadgeHtml(t)}
       ${overdueLabel(t)}
       <button class="edit-btn summary-edit-team" data-id="${t.id}" title="Editar">✎</button>
     </div>
@@ -2949,6 +3002,7 @@ function renderDaySummaryTeam(){
         <div class="summary-check team-summary-check" data-id="${t.id}"></div>
         ${personTag(t)}
         <span class="summary-text">${escapeHtml(t.text)}</span>
+        ${importantBadgeHtml(t)}
         ${pendingLabel(t)}
         <button class="edit-btn summary-edit-team" data-id="${t.id}" title="Editar">✎</button>
       </div>
@@ -2976,7 +3030,7 @@ function renderSummaryNoDate(){
   if(!el) return;
   const base = taskFilter==='todas' ? (personalTasks||[]) : (personalTasks||[]).filter(t=>t.area===taskFilter);
   const list = base
-    .filter(t => !t.dueDate && !isTaskDoneForDate(t, todayKey()))
+    .filter(t => isMyOwnTask(t) && !t.dueDate && !isTaskDoneForDate(t, todayKey()))
     .sort((a,b)=>(a.order ?? a.ts) - (b.order ?? b.ts));
   if(!list.length){
     el.innerHTML = '<div class="empty">No tenés pendientes sin fecha.</div>';
@@ -2991,6 +3045,7 @@ function renderSummaryNoDate(){
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
       ${personalPhotoThumbHtml(t)}
       ${responsableLabel}
+      ${importantBadgeHtml(t)}
       ${personalActionButtonsHtml(t)}
     </div>
   `;
@@ -3036,6 +3091,7 @@ function renderSummaryByEmployee(){
           <div class="summary-check team-summary-check" data-id="${t.id}"></div>
           ${categoryTagHtml(t)}
           <span class="summary-text">${escapeHtml(t.text)}</span>
+          ${importantBadgeHtml(t)}
           ${dueBadgeHtml(t.dueDate, false)}
           <button class="edit-btn summary-edit-team" data-id="${t.id}" title="Editar">✎</button>
         </div>
@@ -3063,7 +3119,7 @@ function renderSummaryMineAll(){
   const todayStr = todayKey();
   const base = taskFilter==='todas' ? (personalTasks||[]) : (personalTasks||[]).filter(t=>t.area===taskFilter);
   const list = base
-    .filter(t => !isTaskDoneForDate(t, todayStr))
+    .filter(t => isMyOwnTask(t) && !isTaskDoneForDate(t, todayStr))
     .sort((a,b)=>{
       const da = a.dueDate||'', db = b.dueDate||'';
       if(da && db){
@@ -3090,6 +3146,7 @@ function renderSummaryMineAll(){
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
       ${personalPhotoThumbHtml(t)}
       ${responsableLabel}
+      ${importantBadgeHtml(t)}
       ${timeLabel}
       ${dueLabel}
       ${personalActionButtonsHtml(t)}
@@ -3130,6 +3187,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
 (async function initMiDia(){
   document.getElementById('task-due-date').value = dateKey(new Date());
+  document.getElementById('task-category').innerHTML = categorySelectOptionsHtml('otro');
   document.getElementById('task-responsible').innerHTML = ptaskResponsibleOptionsHtml('');
   renderDateHeader();
   renderTaskFilters();
