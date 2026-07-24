@@ -3214,7 +3214,11 @@ function renderSummaryByEmployee(){
   el.innerHTML = order.map(key=>{
     const list = byPerson[key].sort((a,b)=>{
       const da = effectiveDueKey(a), db = effectiveDueKey(b);
-      if(da && db) return da.localeCompare(db);
+      if(da && db){
+        const cmp = da.localeCompare(db);
+        if(cmp !== 0) return cmp;
+        return (a.time||'').localeCompare(b.time||'');
+      }
       if(da) return -1;
       if(db) return 1;
       return b.ts - a.ts;
@@ -3224,6 +3228,7 @@ function renderSummaryByEmployee(){
       ${list.map(t=>`
         <div class="summary-row">
           <div class="summary-check team-summary-check" data-id="${t.id}"></div>
+          ${t.time ? `<span class="summary-time">${t.time}</span>` : ''}
           ${categoryTagHtml(t)}
           <span class="summary-text">${escapeHtml(t.text)}</span>
           ${importantBadgeHtml(t)}
