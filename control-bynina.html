@@ -51,6 +51,76 @@
     font-size:13px;
     color:var(--ink-soft);
   }
+
+  /* Shared morning plan board */
+  .plan-board{
+    background:var(--purple);
+    border-radius:12px;
+    padding:16px 16px 14px 16px;
+    margin-bottom:20px;
+    color:#fff;
+  }
+  .plan-header{margin-bottom:12px;}
+  .plan-title{
+    font-family:'Poppins',sans-serif;
+    font-weight:600;
+    font-size:16px;
+  }
+  .plan-sub{
+    font-family:'Inter',sans-serif;
+    font-size:12px;
+    color:#d9d4ef;
+    margin-top:2px;
+  }
+  .plan-field{margin-bottom:10px;}
+  .plan-field label{
+    display:block;
+    font-family:'Poppins',sans-serif;
+    font-size:12px;
+    font-weight:600;
+    color:#efecfa;
+    margin-bottom:5px;
+  }
+  .plan-field textarea{
+    width:100%;
+    min-height:60px;
+    background:#fff;
+    color:var(--ink);
+    border:none;
+    border-radius:8px;
+  }
+  .plan-footer{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .plan-updated{
+    font-family:'Inter',sans-serif;
+    font-size:12px;
+    color:#d9d4ef;
+  }
+  .plan-footer button{
+    background:#fff;
+    color:var(--purple);
+  }
+  .plan-field textarea[readonly]{
+    background:#f0eef7;
+    color:var(--ink);
+    cursor:default;
+  }
+  .plan-board.readonly .plan-footer button{display:none;}
+  .plan-toggle{
+    font-family:'Inter',sans-serif;
+    font-size:11px;
+    color:#c9c3e6;
+    text-align:right;
+    margin-top:8px;
+    cursor:pointer;
+    text-decoration:underline;
+  }
+
   /* Quick capture */
   .capture{
     background:var(--card);
@@ -246,16 +316,6 @@
     background:var(--red-soft);
     color:var(--red);
     font-weight:700;
-  }
-  .due-badge.today{
-    background:var(--rust-soft);
-    color:var(--rust);
-    font-weight:700;
-  }
-  .due-badge.soon{
-    background:#faf1cf;
-    color:#8a6d1b;
-    font-weight:600;
   }
   .time-badge{
     background:var(--purple-soft);
@@ -785,23 +845,6 @@
   .tag.otros{background:#d9e9e9;color:#2c6b6b;}
 
   /* Resumen del día (Mi Día) */
-  .summary-columns{
-    display:flex;
-    gap:14px;
-    flex-wrap:wrap;
-    margin-bottom:4px;
-  }
-  .summary-col{
-    flex:1 1 260px;
-    min-width:240px;
-  }
-  .summary-col-title{
-    font-family:'Poppins',sans-serif;
-    font-size:12px;
-    font-weight:600;
-    color:var(--ink-soft);
-    margin-bottom:6px;
-  }
   .day-summary-card{
     background:var(--card);
     border:1px solid var(--line);
@@ -817,7 +860,6 @@
     border-bottom:1px solid var(--line);
     flex-wrap:wrap;
   }
-  .summary-row .edit-btn{align-self:center;}
   .summary-check{
     flex:0 0 auto;
     width:18px;
@@ -850,14 +892,6 @@
     color:var(--ink-soft);
     margin:10px 0 4px;
   }
-  .summary-employee-name.tag{
-    display:inline-block;
-    font-size:14px;
-    padding:5px 14px;
-    border-radius:14px;
-    margin:14px 0 8px;
-  }
-  .summary-employee-name:first-child{margin-top:0;}
   .draggable-row{cursor:grab;}
   .draggable-row:active{cursor:grabbing;}
   .draggable-row.dragging{opacity:.4;}
@@ -877,6 +911,26 @@
   </div>
 
   <div id="tab-control" class="tab-panel active">
+  <div class="plan-board" id="plan-board">
+    <div class="plan-header">
+      <div class="plan-title">Plan de mañana — corte y control</div>
+      <div class="plan-sub">Visible para todo el que abra este link</div>
+    </div>
+    <div class="plan-field">
+      <label for="plan-corte">Corte prioritario (Ari Chico / Ale)</label>
+      <textarea id="plan-corte" placeholder="Qué se corta mañana, en orden..."></textarea>
+    </div>
+    <div class="plan-field">
+      <label for="plan-noemi">Indicación para Noemi</label>
+      <textarea id="plan-noemi" placeholder="Qué controlar/contar mañana..."></textarea>
+    </div>
+    <div class="plan-footer">
+      <span class="plan-updated" id="plan-updated">sin actualizar todavía</span>
+      <button id="plan-save-btn">Guardar plan</button>
+    </div>
+    <div class="plan-toggle" id="plan-toggle">Soy Ariel — activar edición</div>
+  </div>
+
   <div class="section-title st-rust">Tareas rápidas para el equipo</div>
   <div class="capture team-capture">
     <div class="capture-label">Crear tarea puntual (les aparece a ellos)</div>
@@ -895,10 +949,6 @@
       <input type="checkbox" id="team-involve-me">
       Estoy involucrado — me figura en Mi Día y en el Calendario como "Responsable: [persona]"
     </label>
-    <label class="check-row">
-      <input type="checkbox" id="team-important">
-      ⭐ Importante
-    </label>
   </div>
 
   <div class="filters" id="filters"></div>
@@ -911,6 +961,17 @@
 
   <div class="section-title st-green">Resueltos</div>
   <div id="resolved-list"></div>
+
+  <div class="section-title st-purple">Checklist diario del equipo</div>
+  <div class="checklist-sub" id="checklist-date"></div>
+  <div class="checklist-toggle" id="checklist-edit-toggle">✏️ Editar checklist (orden, horarios, tareas)</div>
+  <div id="checklist"></div>
+
+  <div class="checklist-editor" id="checklist-editor" style="display:none;">
+    <div class="checklist-editor-hint">Modo edición activo — ordená con las flechas, agregá horario, y sumá o sacá tareas. Se guarda solo.</div>
+    <div id="checklist-editor-body"></div>
+    <button class="cl-add-section-btn" id="checklist-add-section">+ agregar persona</button>
+  </div>
   </div>
 
   <div id="tab-mi-dia" class="tab-panel">
@@ -923,10 +984,11 @@
       <button id="next-day">›</button>
     </div>
 
-    <div class="section-title st-rust">Agregar tarea</div>
+    <div class="section-title st-green" id="summary-section-title">Resumen de tu día</div>
+    <div class="day-summary-card" id="day-summary"></div>
+
+    <div class="section-title st-rust">Mis tareas</div>
     <div class="capture">
-      <div class="capture-label" style="margin-top:0;">Responsable(s) — opcional, elegí uno o varios</div>
-      <div class="filters" id="task-responsible-chips"></div>
       <div class="capture-row">
         <select id="task-area">
           <option value="nina">By Nina</option>
@@ -936,7 +998,6 @@
           <option value="otros">Otros clientes</option>
           <option value="personal">Personal</option>
         </select>
-        <select id="task-category"></select>
         <input type="date" id="task-due-date">
         <input type="time" id="task-time-input">
         <textarea id="task-text-input" placeholder="Qué tenés que hacer..."></textarea>
@@ -946,33 +1007,9 @@
         <input type="checkbox" id="task-repeat-daily">
         🔁 Se repite todos los días
       </label>
-      <label class="check-row">
-        <input type="checkbox" id="task-important">
-        ⭐ Importante
-      </label>
     </div>
     <div class="filters" id="task-filters"></div>
-
-    <div class="section-title st-green" id="summary-section-title">Resumen de tu día</div>
-    <div class="summary-columns">
-      <div class="summary-col">
-        <div class="summary-col-title">Mis tareas</div>
-        <div class="day-summary-card" id="day-summary-mine"></div>
-      </div>
-      <div class="summary-col">
-        <div class="summary-col-title">Tareas de mis empleados</div>
-        <div class="day-summary-card" id="day-summary-team"></div>
-      </div>
-    </div>
-
-    <div class="section-title st-purple">Pendientes sin fecha</div>
-    <div class="day-summary-card" id="summary-no-date"></div>
-
-    <div class="section-title st-rust">Pendientes por empleado</div>
-    <div class="day-summary-card" id="summary-by-employee"></div>
-
-    <div class="section-title st-green">Lo que tengo pendiente yo</div>
-    <div class="day-summary-card" id="summary-mine-all"></div>
+    <div id="task-list"></div>
   </div>
 
   <div id="tab-calendario" class="tab-panel">
@@ -1008,6 +1045,7 @@
   </div>
 
   <div id="emp-tab-tareas" class="tab-panel active">
+  <div id="employee-checklist"></div>
 
   <div class="section-title st-rust">Agregar tarea</div>
   <div class="capture">
@@ -1085,12 +1123,6 @@
         Compartida conmigo (me figura en Mi Día y en el Calendario como "Responsable: [persona]")
       </label>
     </div>
-    <div class="modal-field">
-      <label class="check-row" style="margin:0;">
-        <input type="checkbox" id="edit-task-important">
-        ⭐ Importante
-      </label>
-    </div>
     <div class="modal-footer">
       <button class="modal-cancel-btn" id="edit-task-cancel">Cancelar</button>
       <button id="edit-task-save">Guardar</button>
@@ -1113,14 +1145,6 @@
       </select>
     </div>
     <div class="modal-field">
-      <label for="edit-ptask-category">Sector</label>
-      <select id="edit-ptask-category"></select>
-    </div>
-    <div class="modal-field">
-      <label>Responsable(s)</label>
-      <div class="filters" id="edit-ptask-responsible-chips"></div>
-    </div>
-    <div class="modal-field">
       <label for="edit-ptask-due">Vence</label>
       <input type="date" id="edit-ptask-due">
     </div>
@@ -1135,10 +1159,6 @@
     <label class="check-row">
       <input type="checkbox" id="edit-ptask-repeat">
       🔁 Se repite todos los días
-    </label>
-    <label class="check-row">
-      <input type="checkbox" id="edit-ptask-important">
-      ⭐ Importante
     </label>
     <div class="modal-footer">
       <button class="modal-cancel-btn" id="edit-ptask-cancel">Cancelar</button>
@@ -1194,40 +1214,6 @@ async function fbSet(path, value){
   return db.ref(path).set(value);
 }
 
-/* ===== Merge seguro de listas (evita que se pisen los cambios entre usuarios) =====
-   Compara lo que había cuando cargamos (baseline) contra lo que tenemos ahora en
-   pantalla (local) y contra lo último que hay en Firebase (server, que puede tener
-   cambios de otras personas que guardaron mientras tanto). El resultado aplica
-   SOLO lo que cambió localmente (altas, ediciones, bajas) sobre la base más
-   reciente del servidor, así nadie borra sin querer lo que cargó otro. */
-function mergeTaskArrays(baseline, local, server){
-  const baseMap = new Map((baseline||[]).map(t=>[t.id, t]));
-  const localMap = new Map((local||[]).map(t=>[t.id, t]));
-  const resultMap = new Map((server||[]).map(t=>[t.id, t]));
-
-  // Altas y ediciones locales: se aplican sobre la base del servidor.
-  localMap.forEach((localTask, id)=>{
-    const baseTask = baseMap.get(id);
-    if(!baseTask){
-      // Tarea nueva creada localmente desde la última carga.
-      resultMap.set(id, localTask);
-    } else if(JSON.stringify(baseTask) !== JSON.stringify(localTask)){
-      // Tarea que se editó localmente: nuestra versión gana para ese registro puntual.
-      resultMap.set(id, localTask);
-    }
-    // Si no cambió localmente, se deja tal cual esté en el servidor (por si otro la editó).
-  });
-
-  // Bajas locales: si algo que existía en baseline ya no está en local, se borró acá.
-  baseMap.forEach((baseTask, id)=>{
-    if(!localMap.has(id)){
-      resultMap.delete(id);
-    }
-  });
-
-  return Array.from(resultMap.values());
-}
-
 const PEOPLE = {
   general:'General', emir:'Emir', aripchico:'Ari Chico', ale:'Ale',
   noemi:'Noemi', flor:'Flor', carol:'Carol', noelia:'Noelia',
@@ -1242,136 +1228,6 @@ const ACTIVE_PEOPLE = Object.fromEntries(
 );
 let activeFilter = 'todos';
 
-/* ===== Personas y sectores creados a mano por Ariel (se guardan en Firebase y quedan para siempre) ===== */
-let customPeople = {};
-let customCategories = {};
-
-function slugify(str){
-  return String(str).toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || ('x'+Date.now());
-}
-
-async function loadCustomPeople(){
-  try{
-    const val = await fbGet('control_bynina/custom_people');
-    customPeople = val ? JSON.parse(val) : {};
-  }catch(e){ customPeople = {}; }
-  Object.entries(customPeople).forEach(([k,v])=>{
-    PEOPLE[k] = v;
-    ACTIVE_PEOPLE[k] = v;
-  });
-}
-async function saveCustomPeople(){
-  try{ await fbSet('control_bynina/custom_people', JSON.stringify(customPeople)); }catch(e){}
-}
-
-async function loadCustomCategories(){
-  try{
-    const val = await fbGet('control_bynina/custom_categories');
-    customCategories = val ? JSON.parse(val) : {};
-  }catch(e){ customCategories = {}; }
-  Object.entries(customCategories).forEach(([k,v])=>{
-    TASK_CATEGORIES[k] = v;
-    if(!TASK_CATEGORY_COLOR[k]) TASK_CATEGORY_COLOR[k] = '#5b4e9e';
-  });
-}
-async function saveCustomCategories(){
-  try{ await fbSet('control_bynina/custom_categories', JSON.stringify(customCategories)); }catch(e){}
-}
-
-function responsibleChipsHtml(selectedKeys, newChipId){
-  const sel = selectedKeys || [];
-  const opts = Object.entries(ACTIVE_PEOPLE).filter(([k])=>k!=='general');
-  return opts.map(([k,v])=>
-    `<div class="chip ptask-resp-chip ${sel.includes(k)?'active':''}" data-person="${k}">${v}</div>`
-  ).join('') + `<div class="chip" id="${newChipId}">+ Nueva persona</div>`;
-}
-
-function getSelectedResponsibleChips(containerId){
-  const el = document.getElementById(containerId);
-  if(!el) return [];
-  return Array.from(el.querySelectorAll('.ptask-resp-chip.active')).map(c=>c.dataset.person);
-}
-
-function wireResponsibleChips(containerId, newChipId){
-  const el = document.getElementById(containerId);
-  if(!el) return;
-  el.querySelectorAll('.ptask-resp-chip').forEach(chip=>{
-    chip.addEventListener('click', ()=>{ chip.classList.toggle('active'); });
-  });
-  const newChip = document.getElementById(newChipId);
-  if(newChip) newChip.addEventListener('click', async ()=>{
-    const before = getSelectedResponsibleChips(containerId);
-    const key = await createNewPerson(null);
-    if(key){
-      el.innerHTML = responsibleChipsHtml([...before, key], newChipId);
-      wireResponsibleChips(containerId, newChipId);
-    }
-  });
-}
-
-function refreshAllPersonSelects(selectedKey){
-  const taskRespChips = document.getElementById('task-responsible-chips');
-  if(taskRespChips){
-    const sel = getSelectedResponsibleChips('task-responsible-chips');
-    if(selectedKey !== undefined && !sel.includes(selectedKey)) sel.push(selectedKey);
-    taskRespChips.innerHTML = responsibleChipsHtml(sel, 'task-responsible-new-chip');
-    wireResponsibleChips('task-responsible-chips', 'task-responsible-new-chip');
-  }
-  const editRespChips = document.getElementById('edit-ptask-responsible-chips');
-  if(editRespChips){
-    const sel = getSelectedResponsibleChips('edit-ptask-responsible-chips');
-    if(selectedKey !== undefined && !sel.includes(selectedKey)) sel.push(selectedKey);
-    editRespChips.innerHTML = responsibleChipsHtml(sel, 'edit-ptask-responsible-new-chip');
-    wireResponsibleChips('edit-ptask-responsible-chips', 'edit-ptask-responsible-new-chip');
-  }
-  renderTeamPersonChips();
-  if(document.getElementById('edit-task-person')) populateEditPersonSelect();
-}
-
-function refreshAllCategorySelects(selectedKey){
-  const taskCat = document.getElementById('task-category');
-  if(taskCat) taskCat.innerHTML = categorySelectOptionsHtml(selectedKey !== undefined ? selectedKey : taskCat.value);
-  const editPtaskCat = document.getElementById('edit-ptask-category');
-  if(editPtaskCat) editPtaskCat.innerHTML = categorySelectOptionsHtml(selectedKey !== undefined ? selectedKey : editPtaskCat.value);
-  const editTaskCat = document.getElementById('edit-task-category');
-  if(editTaskCat) editTaskCat.innerHTML = categorySelectOptionsHtml(selectedKey !== undefined ? selectedKey : editTaskCat.value);
-  renderTeamCategoryChips();
-}
-
-async function createNewPerson(selectEl){
-  const previous = selectEl ? selectEl.value : '';
-  const name = prompt('Nombre de la nueva persona:');
-  if(!name || !name.trim()){
-    if(selectEl) selectEl.value = previous === '__new_person__' ? '' : previous;
-    return null;
-  }
-  const key = slugify(name);
-  customPeople[key] = name.trim();
-  PEOPLE[key] = name.trim();
-  ACTIVE_PEOPLE[key] = name.trim();
-  await saveCustomPeople();
-  refreshAllPersonSelects(key);
-  return key;
-}
-
-async function createNewCategory(selectEl){
-  const previous = selectEl ? selectEl.value : '';
-  const name = prompt('Nombre del nuevo sector:');
-  if(!name || !name.trim()){
-    if(selectEl) selectEl.value = previous === '__new_category__' ? 'otro' : previous;
-    return null;
-  }
-  const key = slugify(name);
-  customCategories[key] = name.trim();
-  TASK_CATEGORIES[key] = name.trim();
-  TASK_CATEGORY_COLOR[key] = '#5b4e9e';
-  await saveCustomCategories();
-  refreshAllCategorySelects(key);
-  return key;
-}
-
 /* ===== Tema de la tarea (Web / Diseño / Redes / Marketing / Otro) ===== */
 const TASK_CATEGORIES = {web:'Web', diseno:'Diseño', redes:'Redes', marketing:'Marketing', otro:'Otro'};
 const TASK_CATEGORY_COLOR = {web:'#5b4e9e', diseno:'#8b4a2b', redes:'#2f6b4f', marketing:'#7a3230', otro:'#847d70'};
@@ -1379,7 +1235,7 @@ const TASK_CATEGORY_COLOR = {web:'#5b4e9e', diseno:'#8b4a2b', redes:'#2f6b4f', m
 function categorySelectOptionsHtml(selected){
   return Object.entries(TASK_CATEGORIES).map(([k,v])=>
     `<option value="${k}" ${k===(selected||'otro')?'selected':''}>${v}</option>`
-  ).join('') + '<option value="__new_category__">+ Nuevo sector...</option>';
+  ).join('');
 }
 
 /* ===== Repetición flexible (ninguna / diaria / semanal / cada 15 días / mensual) ===== */
@@ -1428,8 +1284,8 @@ function taskRecursOnDate(t, dateStr){
 }
 
 /* ===== Estado de la tarea (Pendiente / En proceso / Finalizado) ===== */
-const TASK_STATUS = {pendiente:'Pendiente', proceso:'En proceso', depende:'Depende de otra persona', finalizado:'Finalizado'};
-const TASK_STATUS_COLOR = {pendiente:'#8b4a2b', proceso:'#5b4e9e', depende:'#b45309', finalizado:'#2f6b4f'};
+const TASK_STATUS = {pendiente:'Pendiente', proceso:'En proceso', finalizado:'Finalizado'};
+const TASK_STATUS_COLOR = {pendiente:'#8b4a2b', proceso:'#5b4e9e', finalizado:'#2f6b4f'};
 function getTaskStatusForDate(t, dateStr){
   if(taskRepeatType(t) !== 'none'){
     return (t.statusDates && t.statusDates[dateStr]) || 'pendiente';
@@ -1450,21 +1306,6 @@ function setTaskStatusForDate(t, dateStr, status){
 function taskStatusSelectHtml(t, dateStr){
   const current = getTaskStatusForDate(t, dateStr);
   return Object.entries(TASK_STATUS).map(([k,v])=>`<option value="${k}" ${k===current?'selected':''}>${v}</option>`).join('');
-}
-function dependeBadgeHtml(t, dateStr){
-  const status = getTaskStatusForDate(t, dateStr);
-  if(status !== 'depende' || !t.dependeDe) return '';
-  return `<span class="due-badge" style="background:#fef3c7;color:#92400e">⏳ Depende de: ${escapeHtml(t.dependeDe)}</span>`;
-}
-// Devuelve false (y no cambia nada) si el usuario cancela el prompt de "depende de quién".
-function applyStatusChange(t, dKey, newStatus){
-  if(newStatus === 'depende'){
-    const who = prompt('¿De quién depende esta tarea?', t.dependeDe || '');
-    if(who === null) return false;
-    t.dependeDe = who.trim();
-  }
-  setTaskStatusForDate(t, dKey, newStatus);
-  return true;
 }
 
 // ===== Vista de empleado (link propio por persona) =====
@@ -1526,11 +1367,23 @@ function escapeAttr(str){
 const CHECKLIST_CONFIG_KEY = 'control_bynina/checklistConfig';
 
 async function loadChecklistConfig(){
-  // Checklist diario del equipo: funcionalidad retirada a pedido de Ariel (23/07).
+  try{
+    const val = await fbGet(CHECKLIST_CONFIG_KEY);
+    if(val){
+      checklistData = JSON.parse(val);
+    } else {
+      checklistData = JSON.parse(JSON.stringify(defaultChecklistData));
+      await saveChecklistConfig();
+    }
+  }catch(e){
+    checklistData = JSON.parse(JSON.stringify(defaultChecklistData));
+  }
 }
 
 async function saveChecklistConfig(){
-  // Checklist diario del equipo: funcionalidad retirada a pedido de Ariel (23/07).
+  try{
+    await fbSet(CHECKLIST_CONFIG_KEY, JSON.stringify(checklistData));
+  }catch(e){}
 }
 
 let checklistState = {};
@@ -1575,21 +1428,190 @@ function taskAppliesToDate(t, dateStr){
 }
 
 async function loadChecklist(){
-  // Checklist diario del equipo: funcionalidad retirada a pedido de Ariel (23/07).
+  const key = 'control_bynina/checklist/' + todayKey();
+  try{
+    const val = await fbGet(key);
+    checklistState = val ? JSON.parse(val) : {};
+  }catch(e){
+    checklistState = {};
+  }
 }
 
 async function saveChecklistItem(id, checked){
-  // Checklist diario del equipo: funcionalidad retirada a pedido de Ariel (23/07).
+  checklistState[id] = checked;
+  const key = 'control_bynina/checklist/' + todayKey();
+  try{
+    await fbSet(key, JSON.stringify(checklistState));
+  }catch(e){}
 }
 
 function renderChecklist(){
-  // Checklist diario del equipo: funcionalidad retirada a pedido de Ariel (23/07).
-}
+  document.getElementById('checklist-date').textContent = 'hoy, ' + document.getElementById('today').textContent + ' — se reinicia solo cada día';
+  const el = document.getElementById('checklist');
+  el.innerHTML = checklistData.map(sec => {
+    const total = sec.items.length;
+    const done = sec.items.filter(it => checklistState[it.id]).length;
+    const progressClass = done === 0 ? 'zero' : '';
+    const personKey = Object.keys(PEOPLE).find(k => PEOPLE[k] === sec.person);
+    const pendingTeam = teamTasks.filter(t => (taskRepeatType(t)!=='none' || !isTaskDoneForDate(t, todayKey())) && t.person === personKey)
+      .sort((a,b)=>b.ts-a.ts);
+    const teamBlock = pendingTeam.length ? `
+      <div class="check-team-tasks">
+        ${pendingTeam.map(teamTaskRowHtml).join('')}
+      </div>
+    ` : '';
+    return `
+      <div class="check-card">
+        <div class="check-card-header">
+          <div class="check-card-name">${sec.person}</div>
+          <div class="check-progress ${progressClass}">${done}/${total}</div>
+        </div>
+        ${sec.items.map(it => `
+          <div class="check-item ${checklistState[it.id] ? 'done' : ''}">
+            <input type="checkbox" id="chk-${it.id}" ${checklistState[it.id] ? 'checked' : ''}>
+            <div class="check-item-body">
+              <label for="chk-${it.id}">${escapeHtml(it.label)}</label>
+              ${it.time ? `<span class="due-badge time-badge">🕐 ${escapeHtml(it.time)}</span>` : ''}
+            </div>
+          </div>
+        `).join('')}
+        ${teamBlock}
+      </div>
+    `;
+  }).join('');
 
+  el.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+    cb.addEventListener('change', async ()=>{
+      const id = cb.id.replace('chk-','');
+      await saveChecklistItem(id, cb.checked);
+      renderChecklist();
+    });
+  });
+
+  el.querySelectorAll('.team-check').forEach(btn=>{
+    btn.addEventListener('click', ()=>toggleTeamTaskResolved(btn.dataset.id));
+  });
+  el.querySelectorAll('.team-del').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      teamTasks = teamTasks.filter(x=>x.id!==btn.dataset.id);
+      renderChecklist();
+      renderLists();
+      await saveTeamTasks();
+    });
+  });
+  el.querySelectorAll('.team-postpone').forEach(btn=>{
+    btn.addEventListener('click', ()=>postponeTeamTask(btn.dataset.id));
+  });
+  el.querySelectorAll('.task-undo').forEach(btn=>{
+    btn.addEventListener('click', ()=>undoTeamTaskCompletion(btn.dataset.id));
+  });
+  el.querySelectorAll('.team-edit').forEach(btn=>{
+    btn.addEventListener('click', ()=>openEditTeamTask(btn.dataset.id));
+  });
+  el.querySelectorAll('.task-status-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const t = teamTasks.find(x=>x.id===sel.dataset.id);
+      if(!t) return;
+      setTaskStatusForDate(t, nextRecurrence(t), sel.value);
+      renderChecklist();
+      renderLists();
+      refreshCalendars();
+      await saveTeamTasks();
+    });
+  });
+}
 
 function renderChecklistEditor(){
-  // Editor del checklist: funcionalidad retirada a pedido de Ariel (23/07).
+  const panel = document.getElementById('checklist-editor');
+  if(!checklistEditMode){
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = '';
+  const body = document.getElementById('checklist-editor-body');
+  body.innerHTML = checklistData.map((sec, si) => `
+    <div class="cl-edit-card">
+      <div class="cl-edit-header">
+        <button class="cl-move-btn" data-act="sec-up" data-si="${si}" ${si===0?'disabled':''} title="Subir">▲</button>
+        <button class="cl-move-btn" data-act="sec-down" data-si="${si}" ${si===checklistData.length-1?'disabled':''} title="Bajar">▼</button>
+        <input type="text" data-act="sec-name" data-si="${si}" value="${escapeAttr(sec.person)}">
+        <button class="del-btn" data-act="sec-del" data-si="${si}" title="Eliminar persona">×</button>
+      </div>
+      ${sec.items.map((it, ii) => `
+        <div class="cl-item-row">
+          <button class="cl-move-btn" data-act="item-up" data-si="${si}" data-ii="${ii}" ${ii===0?'disabled':''} title="Subir">▲</button>
+          <button class="cl-move-btn" data-act="item-down" data-si="${si}" data-ii="${ii}" ${ii===sec.items.length-1?'disabled':''} title="Bajar">▼</button>
+          <input type="text" data-act="item-label" data-si="${si}" data-ii="${ii}" value="${escapeAttr(it.label)}">
+          <input type="time" data-act="item-time" data-si="${si}" data-ii="${ii}" value="${escapeAttr(it.time||'')}">
+          <button class="del-btn" data-act="item-del" data-si="${si}" data-ii="${ii}" title="Eliminar tarea">×</button>
+        </div>
+      `).join('')}
+      <button class="cl-add-item-btn" data-act="item-add" data-si="${si}">+ agregar tarea</button>
+    </div>
+  `).join('');
+
+  body.querySelectorAll('input[data-act=sec-name]').forEach(inp=>{
+    inp.addEventListener('change', async ()=>{
+      const si = +inp.dataset.si;
+      checklistData[si].person = inp.value.trim() || checklistData[si].person;
+      await saveChecklistConfig();
+      renderChecklist();
+    });
+  });
+  body.querySelectorAll('input[data-act=item-label]').forEach(inp=>{
+    inp.addEventListener('change', async ()=>{
+      const si = +inp.dataset.si, ii = +inp.dataset.ii;
+      checklistData[si].items[ii].label = inp.value.trim() || checklistData[si].items[ii].label;
+      await saveChecklistConfig();
+      renderChecklist();
+    });
+  });
+  body.querySelectorAll('input[data-act=item-time]').forEach(inp=>{
+    inp.addEventListener('change', async ()=>{
+      const si = +inp.dataset.si, ii = +inp.dataset.ii;
+      checklistData[si].items[ii].time = inp.value || '';
+      await saveChecklistConfig();
+      renderChecklist();
+    });
+  });
+  body.querySelectorAll('button[data-act]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const act = btn.dataset.act;
+      const si = +btn.dataset.si;
+      const ii = btn.dataset.ii !== undefined ? +btn.dataset.ii : null;
+      if(act === 'sec-up' && si > 0){
+        [checklistData[si-1], checklistData[si]] = [checklistData[si], checklistData[si-1]];
+      } else if(act === 'sec-down' && si < checklistData.length-1){
+        [checklistData[si+1], checklistData[si]] = [checklistData[si], checklistData[si+1]];
+      } else if(act === 'sec-del'){
+        if(!confirm('¿Eliminar a ' + checklistData[si].person + ' y todas sus tareas de la checklist?')) return;
+        checklistData.splice(si, 1);
+      } else if(act === 'item-up' && ii > 0){
+        const arr = checklistData[si].items;
+        [arr[ii-1], arr[ii]] = [arr[ii], arr[ii-1]];
+      } else if(act === 'item-down' && ii < checklistData[si].items.length-1){
+        const arr = checklistData[si].items;
+        [arr[ii+1], arr[ii]] = [arr[ii], arr[ii+1]];
+      } else if(act === 'item-del'){
+        checklistData[si].items.splice(ii, 1);
+      } else if(act === 'item-add'){
+        checklistData[si].items.push({id: genChecklistId('item'), label: 'Nueva tarea', time: ''});
+      } else {
+        return;
+      }
+      await saveChecklistConfig();
+      renderChecklist();
+      renderChecklistEditor();
+    });
+  });
 }
+
+document.getElementById('checklist-add-section').addEventListener('click', async ()=>{
+  checklistData.push({person: 'Nueva persona', items: [{id: genChecklistId('item'), label: 'Nueva tarea', time: ''}]});
+  await saveChecklistConfig();
+  renderChecklist();
+  renderChecklistEditor();
+});
 
 function fmtTime(ts){
   const d = new Date(ts);
@@ -1648,42 +1670,6 @@ function effectiveDueKey(t){
   return t.dueDate || '';
 }
 
-// Fecha sobre la que actúan el selector de estado y el check de una tarea "en vivo":
-// para tareas repetitivas siempre es HOY (así el estado que ves y marcás es siempre
-// el de hoy, y no salta al próximo día libre apenas marcás "Finalizado").
-// Para tareas de una sola vez, es su fecha de vencimiento de siempre.
-function currentOccurrenceKey(t){
-  return taskRepeatType(t) === 'none' ? (t.dueDate || todayKey()) : todayKey();
-}
-
-// Permite marcar como hecha la ocurrencia de AYER de una tarea repetitiva sin tocar la de hoy.
-// Sólo tiene sentido si la tarea realmente le tocaba ayer y todavía no estaba marcada.
-function yesterdayKeyFor(t){
-  if(taskRepeatType(t) === 'none') return null;
-  const y = new Date(todayKey()+'T00:00:00');
-  y.setDate(y.getDate()-1);
-  const yKey = dateKey(y);
-  if(!taskRecursOnDate(t, yKey)) return null;
-  if(getTaskStatusForDate(t, yKey) === 'finalizado') return null;
-  return yKey;
-}
-async function markYesterdayDone(id){
-  const t = teamTasks.find(x=>x.id===id);
-  if(!t) return;
-  const yKey = yesterdayKeyFor(t);
-  if(!yKey) return;
-  setTaskStatusForDate(t, yKey, 'finalizado');
-  if(employeePersona){
-    renderEmployeeView();
-  } else {
-    renderLists();
-    renderChecklist();
-  }
-  refreshCalendars();
-  refreshOpenCalDayModal();
-  await saveTeamTasks();
-}
-
 // Busca la fecha marcada como finalizada más reciente de una tarea recurrente, para poder deshacerla.
 function lastCompletedOccurrence(t){
   if(!t.statusDates) return null;
@@ -1716,7 +1702,7 @@ function renderLists(){
 
   const filtered = activeFilter==='todos' ? teamTasks : teamTasks.filter(t=>t.person===activeFilter);
   const todayStr = todayKey();
-  const pending = filtered.filter(t=>!isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
+  const pending = filtered.filter(t=>taskRepeatType(t)!=='none' || !isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
     const da = effectiveDueKey(a), db = effectiveDueKey(b);
     if(da && db){
       const cmp = da.localeCompare(db);
@@ -1727,7 +1713,7 @@ function renderLists(){
     if(db) return 1;
     return b.ts - a.ts;
   });
-  const resolved = filtered.filter(t=>isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
+  const resolved = filtered.filter(t=>taskRepeatType(t)==='none' && isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
 
   pendingEl.innerHTML = pending.length ? pending.map(teamTicketHtml).join('') :
     '<div class="empty">No hay pendientes acá. Buen momento para respirar.</div>';
@@ -1753,22 +1739,13 @@ function renderLists(){
     sel.addEventListener('change', async ()=>{
       const t = teamTasks.find(x=>x.id===sel.dataset.id);
       if(!t) return;
-      const dKey = currentOccurrenceKey(t);
-      if(!applyStatusChange(t, dKey, sel.value)){ renderLists(); return; }
-      if(t.linkedPersonalTaskId){
-        const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
-        if(pt && syncLinkedDoneStatus(t, pt, dKey)){
-          renderPersonalTasks();
-          await savePersonalTasks();
-        }
-      }
+      setTaskStatusForDate(t, nextRecurrence(t), sel.value);
       renderLists();
       renderChecklist();
       refreshCalendars();
       await saveTeamTasks();
     });
   });
-  renderDaySummary();
 }
 
 function escapeHtml(str){
@@ -1784,44 +1761,10 @@ function refreshCalendars(){
   }
 }
 
-/* ===== Sincronización bilateral: tarea de equipo <-> su copia en Mi Día ===== */
-// Copia texto/fecha/horario de la tarea de equipo hacia su copia personal vinculada.
-function pushTeamFieldsToPersonal(t){
-  if(!t.linkedPersonalTaskId) return null;
-  const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
-  if(!pt) return null;
-  pt.text = t.text;
-  pt.dueDate = t.dueDate;
-  pt.time = t.time;
-  pt.repeat = taskRepeatType(t);
-  delete pt.repeatDaily;
-  return pt;
-}
-// Copia texto/fecha/horario de la tarea personal hacia la tarea de equipo vinculada.
-function pushPersonalFieldsToTeam(pt){
-  if(!pt.linkedTeamTaskId) return null;
-  const t = teamTasks.find(x=>x.id===pt.linkedTeamTaskId);
-  if(!t) return null;
-  t.text = pt.text;
-  t.category = pt.category || 'otro';
-  t.dueDate = pt.dueDate;
-  t.time = pt.time;
-  return t;
-}
-// Sincroniza el estado (hecho/pendiente) de una fecha entre dos tareas vinculadas.
-function syncLinkedDoneStatus(a, b, dateStr){
-  if(!a || !b) return false;
-  if(isTaskDoneForDate(a, dateStr) !== isTaskDoneForDate(b, dateStr)){
-    toggleTaskDoneForDate(b, dateStr);
-    return true;
-  }
-  return false;
-}
-
 async function toggleTeamTaskResolved(id){
   const t = teamTasks.find(x=>x.id===id);
   if(!t) return;
-  const today = currentOccurrenceKey(t);
+  const today = nextRecurrence(t);
   toggleTaskDoneForDate(t, today);
   if(employeePersona){
     renderEmployeeView();
@@ -1845,14 +1788,6 @@ async function postponeTeamTask(id){
   const t = teamTasks.find(x=>x.id===id);
   if(!t || taskRepeatType(t) !== 'none') return;
   t.dueDate = nextDayKey(t.dueDate || todayKey());
-  if(t.linkedPersonalTaskId){
-    const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
-    if(pt){
-      pt.dueDate = t.dueDate;
-      await savePersonalTasks();
-      renderPersonalTasks();
-    }
-  }
   if(employeePersona){
     renderEmployeeView();
   } else {
@@ -1865,12 +1800,6 @@ async function postponeTeamTask(id){
 }
 
 async function deleteTeamTask(id){
-  const t = teamTasks.find(x=>x.id===id);
-  if(t && t.linkedPersonalTaskId){
-    personalTasks = personalTasks.filter(x=>x.id!==t.linkedPersonalTaskId);
-    renderPersonalTasks();
-    await savePersonalTasks();
-  }
   teamTasks = teamTasks.filter(x=>x.id!==id);
   renderLists();
   renderChecklist();
@@ -1887,25 +1816,115 @@ function renderToday(){
   document.getElementById('today').textContent = s;
 }
 
+const PLAN_KEY = 'control-bynina:plan-manana';
+const EDIT_MODE_KEY = 'control-bynina:edit-mode';
+let editMode = false;
+
+function applyEditMode(){
+  const board = document.getElementById('plan-board');
+  const corte = document.getElementById('plan-corte');
+  const noemi = document.getElementById('plan-noemi');
+  if(editMode){
+    board.classList.remove('readonly');
+    corte.removeAttribute('readonly');
+    noemi.removeAttribute('readonly');
+    document.getElementById('plan-toggle').textContent = 'Modo edición activo — tocar para volver a solo lectura';
+  }else{
+    board.classList.add('readonly');
+    corte.setAttribute('readonly','true');
+    noemi.setAttribute('readonly','true');
+    document.getElementById('plan-toggle').textContent = 'Soy Ariel — activar edición';
+  }
+}
+
+async function toggleEditMode(){
+  editMode = !editMode;
+  applyEditMode();
+  try{
+    localStorage.setItem(EDIT_MODE_KEY, editMode ? 'true' : 'false');
+  }catch(e){}
+}
+
+async function loadEditMode(){
+  try{
+    editMode = localStorage.getItem(EDIT_MODE_KEY) === 'true';
+  }catch(e){
+    editMode = false;
+  }
+  applyEditMode();
+}
+
+document.getElementById('plan-toggle').addEventListener('click', toggleEditMode);
+
 let checklistEditMode = false;
 const CHECKLIST_EDIT_MODE_KEY = 'control-bynina:checklist-edit-mode';
 
 function applyChecklistEditMode(){
-  // Editor del checklist: funcionalidad retirada a pedido de Ariel (23/07).
+  const toggle = document.getElementById('checklist-edit-toggle');
+  if(checklistEditMode){
+    toggle.textContent = '✏️ Modo edición activo — tocá para cerrar';
+    toggle.classList.add('active');
+  } else {
+    toggle.textContent = '✏️ Editar checklist (orden, horarios, tareas)';
+    toggle.classList.remove('active');
+  }
+  renderChecklistEditor();
 }
 
 async function toggleChecklistEditMode(){
-  // Editor del checklist: funcionalidad retirada a pedido de Ariel (23/07).
+  checklistEditMode = !checklistEditMode;
+  applyChecklistEditMode();
+  try{
+    localStorage.setItem(CHECKLIST_EDIT_MODE_KEY, checklistEditMode ? 'true' : 'false');
+  }catch(e){}
 }
 
 async function loadChecklistEditMode(){
-  // Editor del checklist: funcionalidad retirada a pedido de Ariel (23/07).
+  try{
+    checklistEditMode = localStorage.getItem(CHECKLIST_EDIT_MODE_KEY) === 'true';
+  }catch(e){
+    checklistEditMode = false;
+  }
+  applyChecklistEditMode();
 }
 
+document.getElementById('checklist-edit-toggle').addEventListener('click', toggleChecklistEditMode);
+
+async function loadPlan(){
+  try{
+    const val = await fbGet('control_bynina/plan_manana');
+    if(val){
+      const data = JSON.parse(val);
+      document.getElementById('plan-corte').value = data.corte || '';
+      document.getElementById('plan-noemi').value = data.noemi || '';
+      document.getElementById('plan-updated').textContent = data.ts ? ('última actualización ' + fmtTime(data.ts)) : 'sin actualizar todavía';
+    }
+  }catch(e){
+    // no plan saved yet
+  }
+}
+
+async function savePlan(){
+  const btn = document.getElementById('plan-save-btn');
+  btn.disabled = true;
+  const data = {
+    corte: document.getElementById('plan-corte').value.trim(),
+    noemi: document.getElementById('plan-noemi').value.trim(),
+    ts: Date.now()
+  };
+  try{
+    await fbSet('control_bynina/plan_manana', JSON.stringify(data));
+    document.getElementById('plan-updated').textContent = 'última actualización ' + fmtTime(data.ts);
+  }catch(e){
+    document.getElementById('plan-updated').textContent = 'error al guardar, probá de nuevo';
+  }
+  btn.disabled = false;
+}
+
+document.getElementById('plan-save-btn').addEventListener('click', savePlan);
 
 const TEAM_TASKS_KEY = 'control-bynina:team-tasks';
 let teamTasks = [];
-let teamTasksBaseline = []; // última foto conocida del servidor, para poder comparar qué cambiamos nosotros
 
 async function loadTeamTasks(){
   try{
@@ -1914,23 +1933,11 @@ async function loadTeamTasks(){
   }catch(e){
     teamTasks = [];
   }
-  teamTasksBaseline = JSON.parse(JSON.stringify(teamTasks));
 }
 
 async function saveTeamTasks(){
   try{
-    // Antes de guardar, traemos lo último del servidor (puede tener cambios de otra persona)
-    // y combinamos: solo aplicamos lo que cambiamos nosotros, sin pisar el resto.
-    let serverTasks = teamTasksBaseline;
-    try{
-      const val = await fbGet('control_bynina/team_tasks');
-      serverTasks = val ? JSON.parse(val) : [];
-    }catch(e){ /* si falla la relectura, seguimos con la última base conocida */ }
-    const merged = mergeTaskArrays(teamTasksBaseline, teamTasks, serverTasks);
-    await fbSet('control_bynina/team_tasks', JSON.stringify(merged));
-    teamTasks = merged;
-    teamTasksBaseline = JSON.parse(JSON.stringify(merged));
-    renderLists();
+    await fbSet('control_bynina/team_tasks', JSON.stringify(teamTasks));
     setStatus('guardado ' + fmtTime(Date.now()));
   }catch(e){
     setStatus('error al guardar');
@@ -1940,36 +1947,14 @@ async function saveTeamTasks(){
 function fmtDue(dueStr){
   if(!dueStr) return '';
   const [y,m,d] = dueStr.split('-');
-  return `${d}/${m}`;
+  const currentYear = String(new Date().getFullYear());
+  return y===currentYear ? `${d}/${m}` : `${d}/${m}/${y.slice(2)}`;
 }
 
 function isOverdue(dueStr, resolved){
   if(!dueStr || resolved) return false;
   const today = todayKey();
   return dueStr < today;
-}
-
-// Devuelve 'overdue' | 'today' | 'soon' (dentro de 2 días) | 'later' | 'none'
-function getDueStatus(dueStr, resolved){
-  if(!dueStr || resolved) return 'none';
-  const [y,m,d] = dueStr.split('-').map(Number);
-  const due = new Date(y, m-1, d);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const diffDays = Math.round((due - today) / 86400000);
-  if(diffDays < 0) return 'overdue';
-  if(diffDays === 0) return 'today';
-  if(diffDays <= 2) return 'soon';
-  return 'later';
-}
-
-function dueBadgeHtml(dueStr, resolved){
-  if(!dueStr) return '';
-  const status = getDueStatus(dueStr, resolved);
-  const cls = status === 'none' ? '' : status;
-  const label = status === 'overdue' ? 'venció ' : status === 'today' ? 'vence hoy' : 'vence ';
-  const dateText = status === 'today' ? '' : fmtDue(dueStr);
-  return `<span class="due-badge ${cls}">${label}${dateText}</span>`;
 }
 
 function categoryTagHtml(t){
@@ -1983,18 +1968,19 @@ function repeatBadgeHtml(t){
   const type = taskRepeatType(t);
   if(type === 'none') return null;
   const next = nextRecurrence(t);
-  return `<span class="due-badge repeat-badge">🔁 ${REPEAT_LABELS[type].toLowerCase()}</span>${dueBadgeHtml(next, false)}`;
+  const overdue = next < todayKey();
+  return `<span class="due-badge repeat-badge">🔁 ${REPEAT_LABELS[type].toLowerCase()}</span><span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(next)}</span>`;
 }
 
 function teamTicketHtml(t){
   const repType = taskRepeatType(t);
-  const done = isTaskDoneForDate(t, todayKey());
-  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) : dueBadgeHtml(t.dueDate, done);
+  const done = repType!=='none' ? false : isTaskDoneForDate(t, todayKey());
+  const overdue = repType==='none' && isOverdue(t.dueDate, done);
+  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) :
+    (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn team-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   const undoBtn = (repType!=='none' && lastCompletedOccurrence(t)) ? `<button class="edit-btn task-undo" data-id="${t.id}" title="Deshacer última finalización">↩</button>` : '';
-  const yKey = repType!=='none' ? yesterdayKeyFor(t) : null;
-  const catchUpBtn = yKey ? `<button class="edit-btn" onclick="markYesterdayDone('${t.id}')" title="Marcar como hecha ayer, sin tocar hoy">✓ ayer</button>` : '';
   return `
     <div class="ticket ${done?'resolved':''}">
       <div class="ticket-check team-check" data-id="${t.id}">${done?'✓':''}</div>
@@ -2003,8 +1989,7 @@ function teamTicketHtml(t){
           <span class="tag ${t.person}">${PEOPLE[t.person] || t.person}</span>
           ${categoryTagHtml(t)}
           ${t.sharedWithMe?'<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Compartida conmigo</span>':''}
-          <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, currentOccurrenceKey(t))}</select>
-          ${dependeBadgeHtml(t, currentOccurrenceKey(t))}
+          <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, nextRecurrence(t))}</select>
           <span class="ticket-time">${fmtTime(t.ts)}</span>
           ${timeLabel}
           ${dueLabel}
@@ -2012,7 +1997,6 @@ function teamTicketHtml(t){
         <div class="ticket-text">${escapeHtml(t.text)}</div>
       </div>
       ${undoBtn}
-      ${catchUpBtn}
       ${postponeBtn}
       <button class="edit-btn team-edit" data-id="${t.id}" title="Editar">✎</button>
       <button class="del-btn team-del" data-id="${t.id}" title="Eliminar">×</button>
@@ -2022,19 +2006,18 @@ function teamTicketHtml(t){
 
 function teamTaskRowHtml(t){
   const repType = taskRepeatType(t);
-  const done = isTaskDoneForDate(t, todayKey());
-  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) : dueBadgeHtml(t.dueDate, done);
+  const done = repType!=='none' ? false : isTaskDoneForDate(t, todayKey());
+  const overdue = repType==='none' && isOverdue(t.dueDate, done);
+  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) :
+    (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn team-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   const undoBtn = (repType!=='none' && lastCompletedOccurrence(t)) ? `<button class="edit-btn task-undo" data-id="${t.id}" title="Deshacer última finalización">↩</button>` : '';
-  const yKey = repType!=='none' ? yesterdayKeyFor(t) : null;
-  const catchUpBtn = yKey ? `<button class="edit-btn" onclick="markYesterdayDone('${t.id}')" title="Marcar como hecha ayer, sin tocar hoy">✓ ayer</button>` : '';
   return `
     <div class="check-item check-team-item">
       <div class="ticket-check team-check" data-id="${t.id}">${done?'✓':''}</div>
-      <label class="check-team-label">${categoryTagHtml(t)} <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, currentOccurrenceKey(t))}</select> ${dependeBadgeHtml(t, currentOccurrenceKey(t))} ${escapeHtml(t.text)} ${timeLabel} ${dueLabel}</label>
+      <label class="check-team-label">${categoryTagHtml(t)} <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, nextRecurrence(t))}</select> ${escapeHtml(t.text)} ${timeLabel} ${dueLabel}</label>
       ${undoBtn}
-      ${catchUpBtn}
       ${postponeBtn}
       <button class="edit-btn team-edit" data-id="${t.id}" title="Editar">✎</button>
       <button class="del-btn team-del" data-id="${t.id}" title="Eliminar">×</button>
@@ -2045,28 +2028,26 @@ function teamTaskRowHtml(t){
 /* ===== Vista de empleado: solo sus tareas, sin editar/eliminar ===== */
 function employeeTicketHtml(t){
   const repType = taskRepeatType(t);
-  const done = isTaskDoneForDate(t, todayKey());
-  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) : dueBadgeHtml(t.dueDate, done);
+  const done = repType!=='none' ? false : isTaskDoneForDate(t, todayKey());
+  const overdue = repType==='none' && isOverdue(t.dueDate, done);
+  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) :
+    (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn employee-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   const undoBtn = (repType!=='none' && lastCompletedOccurrence(t)) ? `<button class="edit-btn task-undo" data-id="${t.id}" title="Deshacer última finalización">↩</button>` : '';
-  const yKey = repType!=='none' ? yesterdayKeyFor(t) : null;
-  const catchUpBtn = yKey ? `<button class="edit-btn" onclick="markYesterdayDone('${t.id}')" title="Marcar como hecha ayer, sin tocar hoy">✓ ayer</button>` : '';
   return `
     <div class="ticket ${done?'resolved':''}">
       <div class="ticket-check employee-check" data-id="${t.id}">${done?'✓':''}</div>
       <div class="ticket-body">
         <div class="ticket-meta">
           ${categoryTagHtml(t)}
-          <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, currentOccurrenceKey(t))}</select>
-          ${dependeBadgeHtml(t, currentOccurrenceKey(t))}
+          <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, nextRecurrence(t))}</select>
           ${timeLabel}
           ${dueLabel}
         </div>
         <div class="ticket-text">${escapeHtml(t.text)}</div>
       </div>
       ${undoBtn}
-      ${catchUpBtn}
       ${postponeBtn}
       <button class="edit-btn employee-edit" data-id="${t.id}" title="Editar">✎</button>
     </div>
@@ -2102,9 +2083,19 @@ function renderEmployeeView(){
   document.getElementById('employee-name-title').textContent = `Hola, ${PEOPLE[employeePersona]}`;
   document.getElementById('employee-today').textContent = document.getElementById('today').textContent;
 
+  const checklistEl = document.getElementById('employee-checklist');
+  checklistEl.innerHTML = renderEmployeeChecklistSection();
+  checklistEl.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+    cb.addEventListener('change', async ()=>{
+      const id = cb.id.replace('echk-','');
+      await saveChecklistItem(id, cb.checked);
+      renderEmployeeView();
+    });
+  });
+
   const mine = teamTasks.filter(t=>t.person===employeePersona);
   const todayStr = todayKey();
-  const pending = mine.filter(t=>!isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
+  const pending = mine.filter(t=>taskRepeatType(t)!=='none' || !isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
     const da = effectiveDueKey(a), db = effectiveDueKey(b);
     if(da && db){
       const cmp = da.localeCompare(db);
@@ -2115,7 +2106,7 @@ function renderEmployeeView(){
     if(db) return 1;
     return b.ts - a.ts;
   });
-  const resolved = mine.filter(t=>isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
+  const resolved = mine.filter(t=>taskRepeatType(t)==='none' && isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
 
   const pendingEl = document.getElementById('employee-pending-list');
   const resolvedEl = document.getElementById('employee-resolved-list');
@@ -2140,14 +2131,7 @@ function renderEmployeeView(){
     sel.addEventListener('change', async ()=>{
       const t = teamTasks.find(x=>x.id===sel.dataset.id);
       if(!t) return;
-      const dKey = currentOccurrenceKey(t);
-      if(!applyStatusChange(t, dKey, sel.value)){ renderEmployeeView(); return; }
-      if(t.linkedPersonalTaskId){
-        const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
-        if(pt && syncLinkedDoneStatus(t, pt, dKey)){
-          await savePersonalTasks();
-        }
-      }
+      setTaskStatusForDate(t, nextRecurrence(t), sel.value);
       renderEmployeeView();
       refreshCalendars();
       await saveTeamTasks();
@@ -2194,12 +2178,10 @@ function renderTeamPersonChips(){
   if(!el) return;
   el.innerHTML = Object.entries(ACTIVE_PEOPLE).map(([k,v])=>
     `<div class="chip team-person-chip" data-person="${k}">${v}</div>`
-  ).join('') + `<div class="chip" id="team-person-new-chip">+ Nueva persona</div>`;
+  ).join('');
   el.querySelectorAll('.team-person-chip').forEach(chip=>{
     chip.addEventListener('click', ()=>{ chip.classList.toggle('active'); });
   });
-  const newChip = document.getElementById('team-person-new-chip');
-  if(newChip) newChip.addEventListener('click', ()=>createNewPerson(null));
 }
 
 let teamNewTaskCategory = 'otro';
@@ -2208,20 +2190,12 @@ function renderTeamCategoryChips(){
   if(!el) return;
   el.innerHTML = Object.entries(TASK_CATEGORIES).map(([k,v])=>
     `<div class="chip team-category-chip ${k===teamNewTaskCategory?'active':''}" data-category="${k}">${v}</div>`
-  ).join('') + `<div class="chip" id="team-category-new-chip">+ Nuevo sector</div>`;
+  ).join('');
   el.querySelectorAll('.team-category-chip').forEach(chip=>{
     chip.addEventListener('click', ()=>{
       teamNewTaskCategory = chip.dataset.category;
       renderTeamCategoryChips();
     });
-  });
-  const newChip = document.getElementById('team-category-new-chip');
-  if(newChip) newChip.addEventListener('click', async ()=>{
-    const key = await createNewCategory(null);
-    if(key){
-      teamNewTaskCategory = key;
-      renderTeamCategoryChips();
-    }
   });
 }
 
@@ -2231,7 +2205,6 @@ async function addTeamTask(){
   const timeEl = document.getElementById('team-time-input');
   const involveEl = document.getElementById('team-involve-me');
   const repeatEl = document.getElementById('team-repeat');
-  const importantEl = document.getElementById('team-important');
   const text = textEl.value.trim();
   if(!text) return;
   let selectedPeople = Array.from(document.querySelectorAll('.team-person-chip.active')).map(c=>c.dataset.person);
@@ -2241,7 +2214,6 @@ async function addTeamTask(){
   const dueDate = dueEl.value || '';
   const time = timeEl.value || '';
   const involveMe = involveEl.checked;
-  const important = importantEl.checked;
   const repeat = repeatEl.value || 'none';
   const category = teamNewTaskCategory;
   const newTasks = selectedPeople.map(person => ({
@@ -2253,8 +2225,7 @@ async function addTeamTask(){
     time: time,
     ts: Date.now(),
     resolved: false,
-    repeat: repeat,
-    important: important
+    repeat: repeat
   }));
   newTasks.forEach(t => teamTasks.push(t));
   textEl.value = '';
@@ -2265,7 +2236,7 @@ async function addTeamTask(){
   refreshCalendars();
   await saveTeamTasks();
   if(involveMe){
-    const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTasks[0].id, repeat);
+    const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTasks[0].id, repeat==='daily');
     newTasks[0].linkedPersonalTaskId = linkedId;
     newTasks[0].sharedWithMe = true;
     refreshCalendars();
@@ -2273,7 +2244,6 @@ async function addTeamTask(){
     setStatus('guardado y agregado a tu día');
   }
   involveEl.checked = false;
-  importantEl.checked = false;
   repeatEl.value = 'none';
   btn.disabled = false;
   textEl.focus();
@@ -2335,7 +2305,7 @@ async function addEmployeeTask(){
   refreshCalendars();
   await saveTeamTasks();
   if(involveBoss){
-    const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTeamTask.id, repeat);
+    const linkedId = await addToMyTasksForDate(dueDate || todayKey(), time, text, newTeamTask.id, repeat==='daily');
     newTeamTask.linkedPersonalTaskId = linkedId;
     newTeamTask.sharedWithMe = true;
     refreshCalendars();
@@ -2360,54 +2330,7 @@ let editingTeamTaskDateStr = null;
 
 function populateEditPersonSelect(){
   const sel = document.getElementById('edit-task-person');
-  sel.innerHTML = '<option value="ariel">Ariel (vos)</option>' +
-    Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('') +
-    '<option value="__new_person__">+ Nueva persona...</option>';
-}
-
-// Cuando Ariel reasigna una tarea de equipo a sí mismo: deja de ser una tarea de un empleado
-// y pasa a ser una tarea propia en Mi Día (si ya tenía una copia compartida, esa copia queda
-// como la tarea real; si no, se crea una nueva).
-async function transferTeamTaskToMe(t){
-  if(t.linkedPersonalTaskId){
-    const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
-    if(pt){
-      delete pt.linkedTeamTaskId;
-      delete pt.assignedViaResponsable;
-      if(Array.isArray(pt.linkedTeamTaskIds)) delete pt.linkedTeamTaskIds;
-    } else {
-      personalTasks.push({
-        id: 'tk'+Date.now()+Math.random().toString(36).slice(2,7),
-        area: 'nina',
-        text: t.text,
-        dueDate: t.dueDate || '',
-        time: t.time || '',
-        ts: Date.now(),
-        resolved: !!t.resolved,
-        repeat: taskRepeatType(t),
-        important: !!t.important
-      });
-    }
-  } else {
-    personalTasks.push({
-      id: 'tk'+Date.now()+Math.random().toString(36).slice(2,7),
-      area: 'nina',
-      text: t.text,
-      dueDate: t.dueDate || '',
-      time: t.time || '',
-      ts: Date.now(),
-      resolved: !!t.resolved,
-      repeat: taskRepeatType(t),
-      important: !!t.important
-    });
-  }
-  teamTasks = teamTasks.filter(x=>x.id!==t.id);
-  renderPersonalTasks();
-  renderLists();
-  refreshCalendars();
-  await savePersonalTasks();
-  await saveTeamTasks();
-  setStatus('pasó a ser tu responsabilidad — ahora está en Mi Día');
+  sel.innerHTML = Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('');
 }
 
 function openEditTeamTask(id){
@@ -2415,7 +2338,7 @@ function openEditTeamTask(id){
   if(!t) return;
   editingTeamTaskId = id;
   const calOpen = document.getElementById('cal-day-modal').classList.contains('open');
-  editingTeamTaskDateStr = (calOpen && calModalDateKey) ? calModalDateKey : currentOccurrenceKey(t);
+  editingTeamTaskDateStr = (calOpen && calModalDateKey) ? calModalDateKey : nextRecurrence(t);
   populateEditPersonSelect();
   document.getElementById('edit-task-person').value = t.person;
   document.getElementById('edit-task-category').innerHTML = categorySelectOptionsHtml(t.category || 'otro');
@@ -2425,7 +2348,6 @@ function openEditTeamTask(id){
   document.getElementById('edit-task-status').innerHTML = taskStatusSelectHtml(t, editingTeamTaskDateStr);
   document.getElementById('edit-task-repeat').innerHTML = repeatSelectOptionsHtml(taskRepeatType(t));
   document.getElementById('edit-task-shared').checked = !!t.sharedWithMe;
-  document.getElementById('edit-task-important').checked = !!t.important;
   document.getElementById('edit-task-person-field').style.display = employeePersona ? 'none' : '';
   document.getElementById('edit-task-shared-field').style.display = employeePersona ? 'none' : '';
   document.getElementById('edit-task-modal').classList.add('open');
@@ -2441,27 +2363,14 @@ async function saveEditTeamTask(){
   if(!t) return;
   const newText = document.getElementById('edit-task-text').value.trim();
   if(!newText) return;
-  const selectedPerson = employeePersona ? employeePersona : document.getElementById('edit-task-person').value;
-  if(selectedPerson === 'ariel'){
-    // Antes de transferir, guardamos los últimos cambios de texto/fecha/hora que haya hecho en el modal.
-    t.text = newText;
-    t.category = document.getElementById('edit-task-category').value;
-    t.dueDate = document.getElementById('edit-task-due').value || '';
-    t.time = document.getElementById('edit-task-time').value || '';
-    t.important = document.getElementById('edit-task-important').checked;
-    closeEditTeamTask();
-    await transferTeamTaskToMe(t);
-    return;
-  }
   t.text = newText;
-  t.person = selectedPerson;
+  t.person = employeePersona ? employeePersona : document.getElementById('edit-task-person').value;
   t.category = document.getElementById('edit-task-category').value;
   const newDueDate = document.getElementById('edit-task-due').value || '';
   const dueDateChanged = newDueDate !== (t.dueDate || '');
   t.dueDate = newDueDate;
   t.time = document.getElementById('edit-task-time').value || '';
   t.repeat = document.getElementById('edit-task-repeat').value;
-  t.important = document.getElementById('edit-task-important').checked;
   delete t.repeatDaily;
   if(dueDateChanged && taskRepeatType(t) !== 'none'){
     // Cambió el ancla de la repetición: el historial de "finalizado" viejo ya no aplica,
@@ -2469,12 +2378,11 @@ async function saveEditTeamTask(){
     t.statusDates = {};
     t.doneDates = {};
   }
-  const statusDateKey = dueDateChanged ? newDueDate : (editingTeamTaskDateStr || todayKey());
-  applyStatusChange(t, statusDateKey, document.getElementById('edit-task-status').value);
+  setTaskStatusForDate(t, dueDateChanged ? newDueDate : (editingTeamTaskDateStr || todayKey()), document.getElementById('edit-task-status').value);
   if(!employeePersona){
     const sharedNow = document.getElementById('edit-task-shared').checked;
     if(sharedNow && !t.sharedWithMe){
-      const linkedId = await addToMyTasksForDate(t.dueDate || todayKey(), t.time || '', t.text, t.id, taskRepeatType(t));
+      const linkedId = await addToMyTasksForDate(t.dueDate || todayKey(), t.time || '', t.text, t.id, taskRepeatType(t)==='daily');
       t.linkedPersonalTaskId = linkedId;
     } else if(!sharedNow && t.sharedWithMe && t.linkedPersonalTaskId){
       personalTasks = personalTasks.filter(p=>p.id!==t.linkedPersonalTaskId);
@@ -2483,15 +2391,6 @@ async function saveEditTeamTask(){
       delete t.linkedPersonalTaskId;
     }
     t.sharedWithMe = sharedNow;
-  }
-  // Bilateral: si sigue compartida, la copia en Mi Día tiene que quedar igual (texto, fecha, hora y estado).
-  if(t.linkedPersonalTaskId){
-    const pt = pushTeamFieldsToPersonal(t);
-    if(pt){
-      syncLinkedDoneStatus(t, pt, statusDateKey);
-      renderPersonalTasks();
-      await savePersonalTasks();
-    }
   }
   closeEditTeamTask();
   if(employeePersona){
@@ -2510,29 +2409,17 @@ document.getElementById('edit-task-save').addEventListener('click', saveEditTeam
 document.getElementById('edit-task-modal').addEventListener('click', (e)=>{
   if(e.target.id === 'edit-task-modal') closeEditTeamTask();
 });
-document.getElementById('edit-task-person').addEventListener('change', async (e)=>{
-  if(e.target.value === '__new_person__'){
-    const key = await createNewPerson(e.target);
-    if(key) e.target.value = key;
-  }
-});
-document.getElementById('edit-task-category').addEventListener('change', async (e)=>{
-  if(e.target.value === '__new_category__'){
-    const key = await createNewCategory(e.target);
-    if(key) e.target.value = key;
-  }
-});
 
 (async function init(){
   renderToday();
-  await loadCustomPeople();
-  await loadCustomCategories();
   renderFilters();
   renderTeamPersonChips();
   renderTeamCategoryChips();
   document.getElementById('team-repeat').innerHTML = repeatSelectOptionsHtml('none');
   document.getElementById('team-due-date').value = todayKey();
   setStatus('cargando...');
+  await loadPlan();
+  await loadEditMode();
   await loadChecklistEditMode();
   await loadChecklistConfig();
   await loadChecklist();
@@ -2579,8 +2466,7 @@ function isSameDay(d1,d2){
   return dateKey(d1) === dateKey(d2);
 }
 
-async function addToMyTasksForDate(dateStr, time, text, linkedTeamTaskId, repeatType){
-  const repeat = repeatType || 'none';
+async function addToMyTasksForDate(dateStr, time, text, linkedTeamTaskId, repeatDaily){
   const newTask = {
     id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
     area: 'nina',
@@ -2589,7 +2475,7 @@ async function addToMyTasksForDate(dateStr, time, text, linkedTeamTaskId, repeat
     time: time || '',
     ts: Date.now(),
     resolved: false,
-    repeat: repeat,
+    repeatDaily: !!repeatDaily,
     linkedTeamTaskId: linkedTeamTaskId || null
   };
   personalTasks.push(newTask);
@@ -2640,8 +2526,6 @@ document.getElementById('go-today').addEventListener('click', ()=>{
 
 const PERSONAL_TASKS_KEY = 'mi-dia:tasks';
 
-let personalTasksBaseline = []; // última foto conocida del servidor, para poder comparar qué cambiamos nosotros
-
 async function loadPersonalTasks(){
   try{
     const val = await fbGet('control_bynina/personal_tasks');
@@ -2649,23 +2533,11 @@ async function loadPersonalTasks(){
   }catch(e){
     personalTasks = [];
   }
-  personalTasksBaseline = JSON.parse(JSON.stringify(personalTasks));
 }
 
 async function savePersonalTasks(){
   try{
-    // Igual que con las tareas de equipo: releemos el servidor y combinamos,
-    // para no pisar lo que haya guardado otra persona mientras tanto.
-    let serverTasks = personalTasksBaseline;
-    try{
-      const val = await fbGet('control_bynina/personal_tasks');
-      serverTasks = val ? JSON.parse(val) : [];
-    }catch(e){ /* si falla la relectura, seguimos con la última base conocida */ }
-    const merged = mergeTaskArrays(personalTasksBaseline, personalTasks, serverTasks);
-    await fbSet('control_bynina/personal_tasks', JSON.stringify(merged));
-    personalTasks = merged;
-    personalTasksBaseline = JSON.parse(JSON.stringify(merged));
-    renderPersonalTasks();
+    await fbSet('control_bynina/personal_tasks', JSON.stringify(personalTasks));
   }catch(e){}
 }
 
@@ -2680,21 +2552,24 @@ function renderTaskFilters(){
     c.addEventListener('click', ()=>{
       taskFilter = c.dataset.key;
       renderTaskFilters();
-      renderDaySummary();
+      renderPersonalTasks();
     });
   });
 }
 
 function personalTaskHtml(t){
   const done = isTaskDoneForDate(t, todayKey());
-  const repType = taskRepeatType(t);
-  const dueLabel = repType!=='none' ? repeatBadgeHtml(t) : dueBadgeHtml(t.dueDate, done);
+  const overdue = !t.repeatDaily && isOverdue(t.dueDate, done);
+  const dueLabel = t.repeatDaily ? `<span class="due-badge repeat-badge">🔁 diario</span>` :
+    (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
-  const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn ptask-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
+  const postponeBtn = t.repeatDaily ? '' : `<button class="edit-btn ptask-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   let responsableLabel = '';
-  const responsableName = personalTaskResponsibleName(t);
-  if(responsableName){
-    responsableLabel = `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(responsableName)}</span>`;
+  if(t.linkedTeamTaskId){
+    const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
+    if(tt && tt.person && tt.person!=='general'){
+      responsableLabel = `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(PEOPLE[tt.person]||tt.person)}</span>`;
+    }
   }
   return `
     <div class="ticket ${done?'resolved':''} ${responsableLabel?'shared-ticket':''}">
@@ -2718,13 +2593,8 @@ function personalTaskHtml(t){
   `;
 }
 
-
 function personalTaskResponsibleName(t){
-  const people = getResponsiblePeople(t);
-  if(people.length){
-    return people.map(k=>PEOPLE[k] || k).join(', ');
-  }
-  if(t.linkedTeamTaskId && !t.assignedViaResponsable){
+  if(t.linkedTeamTaskId){
     const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
     if(tt && tt.person && tt.person!=='general') return PEOPLE[tt.person] || tt.person;
   }
@@ -2752,7 +2622,6 @@ function sortPersonalTaskGroup(arr){
 
 function renderPersonalTasks(){
   const el = document.getElementById('task-list');
-  if(!el){ renderDaySummary(); return; }
   const filtered = taskFilter==='todas' ? personalTasks : personalTasks.filter(t=>t.area===taskFilter);
   const todayStr = todayKey();
   const pending = filtered.filter(t=>!isTaskDoneForDate(t, todayStr));
@@ -2828,136 +2697,39 @@ function renderPersonalTasks(){
   });
   el.querySelectorAll('.ptask-del').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
-      const pt = personalTasks.find(x=>x.id===btn.dataset.id);
       personalTasks = personalTasks.filter(x=>x.id!==btn.dataset.id);
       renderPersonalTasks();
       await savePersonalTasks();
-      if(pt && pt.linkedTeamTaskId){
-        teamTasks = teamTasks.filter(x=>x.id!==pt.linkedTeamTaskId);
-        renderLists();
-        renderChecklist();
-        refreshCalendars();
-        await saveTeamTasks();
-      }
     });
   });
   renderDaySummary();
 }
 
-// Cuando desde "Mi Día" se asigna un Responsable (alguien que no sea Ari), esa persona
-// tiene que verla en su propia vista (?persona=...), que lee de teamTasks. Antes esto
-// era solo una etiqueta visual y nunca llegaba a la vista del empleado; esta función
-// crea/actualiza/borra la tarea de equipo vinculada según corresponda.
-function getResponsiblePeople(t){
-  if(Array.isArray(t.responsiblePeople)) return t.responsiblePeople;
-  if(t.responsiblePerson) return [t.responsiblePerson];
-  return [];
-}
-
-// IDs de tareas de equipo creadas a partir de la asignación de responsable(s) de esta tarea
-// personal (no confundir con el vínculo inverso "compartida conmigo" de una sola tarea de equipo).
-function getAssignedTeamTaskIds(pt){
-  if(Array.isArray(pt.linkedTeamTaskIds)) return pt.linkedTeamTaskIds;
-  if(pt.linkedTeamTaskId && pt.assignedViaResponsable) return [pt.linkedTeamTaskId];
-  return [];
-}
-
-async function syncResponsibleToTeamTask(pt){
-  const wasLegacySingleLink = !!(pt.linkedTeamTaskId && pt.assignedViaResponsable);
-  const people = getResponsiblePeople(pt);
-  const existingIds = getAssignedTeamTaskIds(pt);
-  const existingByPerson = {};
-  existingIds.forEach(id=>{
-    const tt = teamTasks.find(x=>x.id===id);
-    if(tt) existingByPerson[tt.person] = tt;
-  });
-  const newLinkedIds = [];
-  people.forEach(person=>{
-    let tt = existingByPerson[person];
-    if(tt){
-      tt.text = pt.text;
-      tt.category = pt.category || 'otro';
-      tt.dueDate = pt.dueDate;
-      tt.time = pt.time;
-      tt.repeat = taskRepeatType(pt);
-      newLinkedIds.push(tt.id);
-      delete existingByPerson[person];
-    } else {
-      const newTeamTask = {
-        id: 't' + Date.now() + Math.random().toString(36).slice(2,7) + person,
-        person: person,
-        text: pt.text,
-        category: pt.category || 'otro',
-        dueDate: pt.dueDate,
-        time: pt.time,
-        ts: Date.now(),
-        resolved: false,
-        repeat: taskRepeatType(pt),
-        sharedWithMe: true,
-        linkedPersonalTaskId: pt.id
-      };
-      teamTasks.push(newTeamTask);
-      newLinkedIds.push(newTeamTask.id);
-    }
-  });
-  // Lo que quedó en existingByPerson ya no está entre los responsables elegidos: se elimina.
-  const removedIds = Object.values(existingByPerson).map(tt=>tt.id);
-  if(removedIds.length){
-    teamTasks = teamTasks.filter(t=>!removedIds.includes(t.id));
-  }
-  pt.linkedTeamTaskIds = newLinkedIds;
-  pt.assignedViaResponsable = newLinkedIds.length > 0;
-  if(!newLinkedIds.length){
-    delete pt.linkedTeamTaskIds;
-    delete pt.assignedViaResponsable;
-  }
-  if(wasLegacySingleLink){
-    delete pt.linkedTeamTaskId;
-  }
-  await saveTeamTasks();
-  await savePersonalTasks();
-  renderLists();
-  renderChecklist();
-  refreshCalendars();
-}
-
 async function addPersonalTask(){
   const textEl = document.getElementById('task-text-input');
   const areaEl = document.getElementById('task-area');
-  const categoryEl = document.getElementById('task-category');
   const dueEl = document.getElementById('task-due-date');
   const timeEl = document.getElementById('task-time-input');
   const repeatEl = document.getElementById('task-repeat-daily');
-  const importantEl = document.getElementById('task-important');
   const text = textEl.value.trim();
   if(!text) return;
   const btn = document.getElementById('task-add-btn');
   btn.disabled = true;
-  const newTask = {
+  personalTasks.push({
     id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
     area: areaEl.value,
-    category: categoryEl.value || 'otro',
-    responsiblePeople: getSelectedResponsibleChips('task-responsible-chips'),
     text: text,
     dueDate: dueEl.value || '',
     time: timeEl.value || '',
     ts: Date.now(),
     resolved: false,
-    repeatDaily: repeatEl.checked,
-    important: importantEl.checked
-  };
-  personalTasks.push(newTask);
+    repeatDaily: repeatEl.checked
+  });
   textEl.value = '';
   timeEl.value = '';
   repeatEl.checked = false;
-  importantEl.checked = false;
-  document.getElementById('task-responsible-chips').innerHTML = responsibleChipsHtml([], 'task-responsible-new-chip');
-  wireResponsibleChips('task-responsible-chips', 'task-responsible-new-chip');
-  categoryEl.value = 'otro';
   renderPersonalTasks();
   await savePersonalTasks();
-  await syncResponsibleToTeamTask(newTask);
-  renderPersonalTasks();
   btn.disabled = false;
   textEl.focus();
 }
@@ -2969,11 +2741,6 @@ document.getElementById('task-text-input').addEventListener('keydown', (e)=>{
     addPersonalTask();
   }
 });
-document.getElementById('task-category').addEventListener('change', async (e)=>{
-  if(e.target.value === '__new_category__'){
-    await createNewCategory(e.target);
-  }
-});
 
 let editingPersonalTaskId = null;
 
@@ -2982,14 +2749,10 @@ function openEditPersonalTask(id){
   if(!t) return;
   editingPersonalTaskId = id;
   document.getElementById('edit-ptask-area').value = t.area;
-  document.getElementById('edit-ptask-category').innerHTML = categorySelectOptionsHtml(t.category || 'otro');
-  document.getElementById('edit-ptask-responsible-chips').innerHTML = responsibleChipsHtml(getResponsiblePeople(t), 'edit-ptask-responsible-new-chip');
-  wireResponsibleChips('edit-ptask-responsible-chips', 'edit-ptask-responsible-new-chip');
   document.getElementById('edit-ptask-due').value = t.dueDate || '';
   document.getElementById('edit-ptask-time').value = t.time || '';
   document.getElementById('edit-ptask-text').value = t.text;
   document.getElementById('edit-ptask-repeat').checked = !!t.repeatDaily;
-  document.getElementById('edit-ptask-important').checked = !!t.important;
   document.getElementById('edit-ptask-modal').classList.add('open');
 }
 
@@ -3005,18 +2768,10 @@ async function togglePersonalTaskResolved(id){
   toggleTaskDoneForDate(t, today);
   renderPersonalTasks();
   await savePersonalTasks();
-  const linkedIds = new Set(getAssignedTeamTaskIds(t));
-  if(t.linkedTeamTaskId && !t.assignedViaResponsable) linkedIds.add(t.linkedTeamTaskId);
-  if(linkedIds.size){
-    let changed = false;
-    linkedIds.forEach(ttId=>{
-      const tt = teamTasks.find(x=>x.id===ttId);
-      if(tt && isTaskDoneForDate(tt, today) !== isTaskDoneForDate(t, today)){
-        toggleTaskDoneForDate(tt, today);
-        changed = true;
-      }
-    });
-    if(changed){
+  if(t.linkedTeamTaskId){
+    const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
+    if(tt && isTaskDoneForDate(tt, today) !== isTaskDoneForDate(t, today)){
+      toggleTaskDoneForDate(tt, today);
       renderLists();
       renderChecklist();
       await saveTeamTasks();
@@ -3030,16 +2785,6 @@ async function postponePersonalTask(id){
   t.dueDate = nextDayKey(t.dueDate || dateKey(currentDate));
   renderPersonalTasks();
   await savePersonalTasks();
-  if(t.linkedTeamTaskId){
-    const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
-    if(tt){
-      tt.dueDate = t.dueDate;
-      renderLists();
-      renderChecklist();
-      refreshCalendars();
-      await saveTeamTasks();
-    }
-  }
   setStatus('pospuesta a mañana');
 }
 
@@ -3050,27 +2795,12 @@ async function saveEditPersonalTask(){
   if(!newText) return;
   t.text = newText;
   t.area = document.getElementById('edit-ptask-area').value;
-  t.category = document.getElementById('edit-ptask-category').value || 'otro';
-  t.responsiblePeople = getSelectedResponsibleChips('edit-ptask-responsible-chips');
-  delete t.responsiblePerson;
   t.dueDate = document.getElementById('edit-ptask-due').value || '';
   t.time = document.getElementById('edit-ptask-time').value || '';
   t.repeatDaily = document.getElementById('edit-ptask-repeat').checked;
-  t.important = document.getElementById('edit-ptask-important').checked;
   closeEditPersonalTask();
   renderPersonalTasks();
   await savePersonalTasks();
-  if(t.linkedTeamTaskId){
-    const tt = pushPersonalFieldsToTeam(t);
-    if(tt){
-      renderLists();
-      renderChecklist();
-      refreshCalendars();
-      await saveTeamTasks();
-    }
-  }
-  await syncResponsibleToTeamTask(t);
-  renderPersonalTasks();
 }
 
 document.getElementById('edit-ptask-cancel').addEventListener('click', closeEditPersonalTask);
@@ -3078,122 +2808,14 @@ document.getElementById('edit-ptask-save').addEventListener('click', saveEditPer
 document.getElementById('edit-ptask-modal').addEventListener('click', (e)=>{
   if(e.target.id === 'edit-ptask-modal') closeEditPersonalTask();
 });
-document.getElementById('edit-ptask-category').addEventListener('change', async (e)=>{
-  if(e.target.value === '__new_category__'){
-    await createNewCategory(e.target);
-  }
-});
 
 let dragSummaryId = null;
 
 function renderDaySummary(){
-  renderDaySummaryMine();
-  renderDaySummaryTeam();
-  renderSummaryNoDate();
-  renderSummaryByEmployee();
-  renderSummaryMineAll();
-}
-
-// Botones de acción compartidos por los 3 bloques del resumen que muestran MIS tareas
-// (Mis tareas de hoy, Pendientes sin fecha, Lo que tengo pendiente yo).
-function personalActionButtonsHtml(t){
-  const repType = taskRepeatType(t);
-  const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn ptask-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
-  return `
-    <button class="edit-btn ptask-photo-btn" data-id="${t.id}" title="Agregar/cambiar foto">📷</button>
-    ${postponeBtn}
-    <button class="edit-btn summary-edit-mine" data-id="${t.id}" title="Editar">✎</button>
-    <button class="del-btn ptask-del" data-id="${t.id}" title="Eliminar">×</button>
-    <input type="file" accept="image/*" class="ptask-photo-input" data-id="${t.id}" style="display:none">
-  `;
-}
-
-function personalPhotoThumbHtml(t){
-  return t.photoUrl ? `<img class="ptask-photo" src="${t.photoUrl}" data-full="${t.photoUrl}">` : '';
-}
-
-function wirePersonalActionButtons(el){
-  el.querySelectorAll('.summary-edit-mine').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      openEditPersonalTask(btn.dataset.id);
-    });
-  });
-  el.querySelectorAll('.ptask-postpone').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      postponePersonalTask(btn.dataset.id);
-    });
-  });
-  el.querySelectorAll('.ptask-del').forEach(btn=>{
-    btn.addEventListener('click', async (e)=>{
-      e.stopPropagation();
-      const id = btn.dataset.id;
-      const pt = personalTasks.find(x=>x.id===id);
-      personalTasks = personalTasks.filter(x=>x.id!==id);
-      renderDaySummary();
-      await savePersonalTasks();
-      if(pt){
-        const idsToRemove = new Set(getAssignedTeamTaskIds(pt));
-        if(pt.linkedTeamTaskId && !pt.assignedViaResponsable) idsToRemove.add(pt.linkedTeamTaskId);
-        if(idsToRemove.size){
-          teamTasks = teamTasks.filter(x=>!idsToRemove.has(x.id));
-          renderLists();
-          renderChecklist();
-          refreshCalendars();
-          await saveTeamTasks();
-        }
-      }
-    });
-  });
-  el.querySelectorAll('.ptask-photo-btn').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      const input = el.querySelector(`.ptask-photo-input[data-id="${btn.dataset.id}"]`);
-      if(input) input.click();
-    });
-  });
-  el.querySelectorAll('.ptask-photo-input').forEach(input=>{
-    input.addEventListener('change', async ()=>{
-      const file = input.files[0];
-      if(!file) return;
-      const t = personalTasks.find(x=>x.id===input.dataset.id);
-      if(!t) return;
-      setStatus('subiendo foto...');
-      try{
-        const url = await uploadToCloudinary(file);
-        t.photoUrl = url;
-        renderDaySummary();
-        await savePersonalTasks();
-        setStatus('foto guardada');
-      }catch(e){
-        setStatus('no se pudo subir la foto, probá de nuevo');
-      }
-    });
-  });
-  el.querySelectorAll('.ptask-photo').forEach(img=>{
-    img.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      window.open(img.dataset.full, '_blank');
-    });
-  });
-}
-
-// Una tarea personal con responsable asignado (a otra persona) es en realidad trabajo de un
-// empleado que Ariel solo está siguiendo — no cuenta como "mía" en los bloques de "Mis tareas".
-function isMyOwnTask(t){
-  return !personalTaskResponsibleName(t);
-}
-function importantBadgeHtml(t){
-  return t.important ? '<span class="due-badge soon">⭐ Importante</span>' : '';
-}
-
-function renderDaySummaryMine(){
-  const el = document.getElementById('day-summary-mine');
+  const el = document.getElementById('day-summary');
   if(!el) return;
   const todayStr = dateKey(currentDate);
-  const base = taskFilter==='todas' ? (personalTasks||[]) : (personalTasks||[]).filter(t=>t.area===taskFilter);
-  const dayTasks = base.filter(t => isMyOwnTask(t) && taskAppliesToDate(t, todayStr) && !isTaskDoneForDate(t, todayStr));
+  const dayTasks = (personalTasks||[]).filter(t => taskAppliesToDate(t, todayStr) && !isTaskDoneForDate(t, todayStr));
   if(!dayTasks.length){
     el.innerHTML = '<div class="empty">Sin pendientes para este día.</div>';
     return;
@@ -3222,11 +2844,8 @@ function renderDaySummaryMine(){
       <div class="summary-check" data-id="${t.id}"></div>
       <span class="summary-time">${t.time}</span>
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
-      ${personalPhotoThumbHtml(t)}
       ${responsableLabel}
-      ${importantBadgeHtml(t)}
       ${overdueLabel(t)}
-      ${personalActionButtonsHtml(t)}
     </div>
   `;
   }).join('');
@@ -3240,11 +2859,8 @@ function renderDaySummaryMine(){
       <div class="summary-row draggable-row ${responsableName?'summary-row-shared':''}" draggable="true" data-id="${t.id}">
         <div class="summary-check" data-id="${t.id}"></div>
         <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
-        ${personalPhotoThumbHtml(t)}
         ${responsableLabel}
-        ${importantBadgeHtml(t)}
         ${pendingLabel(t)}
-        ${personalActionButtonsHtml(t)}
       </div>
     `;
     }).join('');
@@ -3257,8 +2873,6 @@ function renderDaySummaryMine(){
       togglePersonalTaskResolved(chk.dataset.id);
     });
   });
-
-  wirePersonalActionButtons(el);
 
   el.querySelectorAll('.draggable-row').forEach(row=>{
     row.addEventListener('dragstart', ()=>{
@@ -3279,219 +2893,6 @@ function renderDaySummaryMine(){
       await reorderNoTimeTasks(todayStr, dragSummaryId, targetId);
     });
   });
-}
-
-// Tareas del equipo (teamTasks) que corresponden al día que estás mirando en Mi Día,
-// ordenadas por horario — es la columna hermana de "Mis tareas".
-function renderDaySummaryTeam(){
-  const el = document.getElementById('day-summary-team');
-  if(!el) return;
-  const todayStr = todayKey();
-  const dayTasks = (teamTasks||[]).filter(t => !isTaskDoneForDate(t, todayStr));
-  if(!dayTasks.length){
-    el.innerHTML = '<div class="empty">Tu equipo no tiene pendientes ahora.</div>';
-    return;
-  }
-  const withTime = dayTasks.filter(t=>t.time).sort((a,b)=>{
-    const cmp = effectiveDueKey(a).localeCompare(effectiveDueKey(b));
-    if(cmp !== 0) return cmp;
-    return a.time.localeCompare(b.time);
-  });
-  const noTime = dayTasks.filter(t=>!t.time).sort((a,b)=>{
-    const cmp = effectiveDueKey(a).localeCompare(effectiveDueKey(b));
-    if(cmp !== 0) return cmp;
-    return b.ts - a.ts;
-  });
-
-  const dateLabel = (t) => taskRepeatType(t)!=='none' ? repeatBadgeHtml(t) :
-    ((t.dueDate && t.dueDate !== todayStr) ?
-      `<span class="due-badge overdue">atrasada · venció ${fmtDue(t.dueDate)}</span>` : '');
-  const personTag = (t) => `<span class="tag ${t.person}">${PEOPLE[t.person] || t.person}</span>`;
-
-  let html = withTime.map(t => `
-    <div class="summary-row">
-      <div class="summary-check team-summary-check" data-id="${t.id}"></div>
-      <span class="summary-time">${t.time}</span>
-      ${personTag(t)}
-      <span class="summary-text">${escapeHtml(t.text)}</span>
-      ${importantBadgeHtml(t)}
-      ${dependeBadgeHtml(t, currentOccurrenceKey(t))}
-      ${dateLabel(t)}
-      <button class="edit-btn summary-edit-team" data-id="${t.id}" title="Editar">✎</button>
-    </div>
-  `).join('');
-
-  if(noTime.length){
-    html += `<div class="summary-subtitle">Sin horario fijo</div>`;
-    html += noTime.map(t => `
-      <div class="summary-row">
-        <div class="summary-check team-summary-check" data-id="${t.id}"></div>
-        ${personTag(t)}
-        <span class="summary-text">${escapeHtml(t.text)}</span>
-        ${importantBadgeHtml(t)}
-        ${dependeBadgeHtml(t, currentOccurrenceKey(t))}
-        ${dateLabel(t)}
-        <button class="edit-btn summary-edit-team" data-id="${t.id}" title="Editar">✎</button>
-      </div>
-    `).join('');
-  }
-  el.innerHTML = html;
-
-  el.querySelectorAll('.team-summary-check').forEach(chk=>{
-    chk.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      toggleTeamTaskResolved(chk.dataset.id);
-    });
-  });
-  el.querySelectorAll('.summary-edit-team').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      openEditTeamTask(btn.dataset.id);
-    });
-  });
-}
-
-// Bloque general (no depende del día que estés mirando): tus tareas propias sin fecha asignada.
-function renderSummaryNoDate(){
-  const el = document.getElementById('summary-no-date');
-  if(!el) return;
-  const base = taskFilter==='todas' ? (personalTasks||[]) : (personalTasks||[]).filter(t=>t.area===taskFilter);
-  const list = base
-    .filter(t => isMyOwnTask(t) && !t.dueDate && !isTaskDoneForDate(t, todayKey()))
-    .sort((a,b)=>(a.order ?? a.ts) - (b.order ?? b.ts));
-  if(!list.length){
-    el.innerHTML = '<div class="empty">No tenés pendientes sin fecha.</div>';
-    return;
-  }
-  el.innerHTML = list.map(t => {
-    const responsableName = personalTaskResponsibleName(t);
-    const responsableLabel = responsableName ? `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(responsableName)}</span>` : '';
-    return `
-    <div class="summary-row">
-      <div class="summary-check" data-id="${t.id}"></div>
-      <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
-      ${personalPhotoThumbHtml(t)}
-      ${responsableLabel}
-      ${importantBadgeHtml(t)}
-      ${personalActionButtonsHtml(t)}
-    </div>
-  `;
-  }).join('');
-  el.querySelectorAll('.summary-check').forEach(chk=>{
-    chk.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      togglePersonalTaskResolved(chk.dataset.id);
-    });
-  });
-  wirePersonalActionButtons(el);
-}
-
-// Bloque general: pendientes de cada empleado (todo lo que tiene abierto hoy), agrupado por persona.
-function renderSummaryByEmployee(){
-  const el = document.getElementById('summary-by-employee');
-  if(!el) return;
-  const todayStr = todayKey();
-  const pendingAll = (teamTasks||[]).filter(t => !isTaskDoneForDate(t, todayStr));
-  if(!pendingAll.length){
-    el.innerHTML = '<div class="empty">Tu equipo no tiene pendientes ahora.</div>';
-    return;
-  }
-  const byPerson = {};
-  pendingAll.forEach(t=>{
-    const key = t.person || 'general';
-    if(!byPerson[key]) byPerson[key] = [];
-    byPerson[key].push(t);
-  });
-  const order = Object.keys(byPerson).sort((a,b)=>(PEOPLE[a]||a).localeCompare(PEOPLE[b]||b));
-  el.innerHTML = order.map(key=>{
-    const list = byPerson[key].sort((a,b)=>{
-      const da = effectiveDueKey(a), db = effectiveDueKey(b);
-      if(da && db){
-        const cmp = da.localeCompare(db);
-        if(cmp !== 0) return cmp;
-        return (a.time||'').localeCompare(b.time||'');
-      }
-      if(da) return -1;
-      if(db) return 1;
-      return b.ts - a.ts;
-    });
-    return `
-      <div class="tag summary-employee-name ${key}">${PEOPLE[key] || key} · ${list.length} pendiente${list.length===1?'':'s'}</div>
-      ${list.map(t=>`
-        <div class="summary-row">
-          <div class="summary-check team-summary-check" data-id="${t.id}"></div>
-          ${t.time ? `<span class="summary-time">${t.time}</span>` : ''}
-          ${categoryTagHtml(t)}
-          <span class="summary-text">${escapeHtml(t.text)}</span>
-          ${importantBadgeHtml(t)}
-          ${taskRepeatType(t)!=='none' ? repeatBadgeHtml(t) : dueBadgeHtml(t.dueDate, false)}
-          <button class="edit-btn summary-edit-team" data-id="${t.id}" title="Editar">✎</button>
-        </div>
-      `).join('')}
-    `;
-  }).join('');
-  el.querySelectorAll('.team-summary-check').forEach(chk=>{
-    chk.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      toggleTeamTaskResolved(chk.dataset.id);
-    });
-  });
-  el.querySelectorAll('.summary-edit-team').forEach(btn=>{
-    btn.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      openEditTeamTask(btn.dataset.id);
-    });
-  });
-}
-
-// Bloque general: todo lo que tenés pendiente vos, sin importar la fecha (hoy, atrasado o futuro).
-function renderSummaryMineAll(){
-  const el = document.getElementById('summary-mine-all');
-  if(!el) return;
-  const todayStr = todayKey();
-  const base = taskFilter==='todas' ? (personalTasks||[]) : (personalTasks||[]).filter(t=>t.area===taskFilter);
-  const list = base
-    .filter(t => isMyOwnTask(t) && !isTaskDoneForDate(t, todayStr))
-    .sort((a,b)=>{
-      const da = a.dueDate||'', db = b.dueDate||'';
-      if(da && db){
-        const cmp = da.localeCompare(db);
-        if(cmp !== 0) return cmp;
-        return (a.time||'').localeCompare(b.time||'');
-      }
-      if(da) return -1;
-      if(db) return 1;
-      return (a.order ?? a.ts) - (b.order ?? b.ts);
-    });
-  if(!list.length){
-    el.innerHTML = '<div class="empty">No tenés pendientes.</div>';
-    return;
-  }
-  el.innerHTML = list.map(t=>{
-    const responsableName = personalTaskResponsibleName(t);
-    const responsableLabel = responsableName ? `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(responsableName)}</span>` : '';
-    const dueLabel = t.dueDate ? dueBadgeHtml(t.dueDate, false) : '';
-    const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
-    return `
-    <div class="summary-row">
-      <div class="summary-check" data-id="${t.id}"></div>
-      <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
-      ${personalPhotoThumbHtml(t)}
-      ${responsableLabel}
-      ${importantBadgeHtml(t)}
-      ${timeLabel}
-      ${dueLabel}
-      ${personalActionButtonsHtml(t)}
-    </div>
-  `;
-  }).join('');
-  el.querySelectorAll('.summary-check').forEach(chk=>{
-    chk.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      togglePersonalTaskResolved(chk.dataset.id);
-    });
-  });
-  wirePersonalActionButtons(el);
 }
 
 async function reorderNoTimeTasks(dateStr, draggedId, targetId){
@@ -3519,11 +2920,6 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
 (async function initMiDia(){
   document.getElementById('task-due-date').value = dateKey(new Date());
-  await loadCustomPeople();
-  await loadCustomCategories();
-  document.getElementById('task-category').innerHTML = categorySelectOptionsHtml('otro');
-  document.getElementById('task-responsible-chips').innerHTML = responsibleChipsHtml([], 'task-responsible-new-chip');
-  wireResponsibleChips('task-responsible-chips', 'task-responsible-new-chip');
   renderDateHeader();
   renderTaskFilters();
   await loadPersonalTasks();
@@ -3712,12 +3108,6 @@ function refreshOpenCalDayModal(){
 }
 
 async function deleteTeamTaskFromCalendar(id){
-  const t = teamTasks.find(x=>x.id===id);
-  if(t && t.linkedPersonalTaskId){
-    personalTasks = personalTasks.filter(x=>x.id!==t.linkedPersonalTaskId);
-    renderPersonalTasks();
-    await savePersonalTasks();
-  }
   teamTasks = teamTasks.filter(x=>x.id!==id);
   renderLists();
   renderChecklist();
@@ -3760,7 +3150,7 @@ function renderCalDayTeamTasks(){
     sel.addEventListener('change', async ()=>{
       const t = teamTasks.find(x=>x.id===sel.dataset.id);
       if(!t) return;
-      if(!applyStatusChange(t, calModalDateKey, sel.value)){ refreshOpenCalDayModal(); return; }
+      setTaskStatusForDate(t, calModalDateKey, sel.value);
       renderLists();
       renderChecklist();
       refreshCalendars();
@@ -3884,37 +3274,6 @@ document.querySelectorAll('.emp-tab-btn').forEach(btn=>{
     document.getElementById('employee-tab-nav').style.display = 'flex';
   }
 })();
-
-/* ===== Sincronización automática =====
-   Cada 20s trae lo último de Firebase y lo combina con lo que tenemos en
-   pantalla, para que si otra persona guardó algo mientras tenías la página
-   abierta, lo veas sin tener que recargar — y sin perder nada tuyo. */
-async function autoSyncTeamTasks(){
-  try{
-    const val = await fbGet('control_bynina/team_tasks');
-    const serverTasks = val ? JSON.parse(val) : [];
-    const merged = mergeTaskArrays(teamTasksBaseline, teamTasks, serverTasks);
-    teamTasks = merged;
-    teamTasksBaseline = JSON.parse(JSON.stringify(merged));
-    if(typeof renderLists === 'function' && document.getElementById('pending-list')) renderLists();
-    if(typeof renderEmployeeView === 'function' && employeePersona) renderEmployeeView();
-  }catch(e){ /* si falla, probamos de nuevo en el próximo ciclo */ }
-}
-async function autoSyncPersonalTasks(){
-  try{
-    const val = await fbGet('control_bynina/personal_tasks');
-    const serverTasks = val ? JSON.parse(val) : [];
-    const merged = mergeTaskArrays(personalTasksBaseline, personalTasks, serverTasks);
-    personalTasks = merged;
-    personalTasksBaseline = JSON.parse(JSON.stringify(merged));
-    if(typeof renderPersonalTasks === 'function') renderPersonalTasks();
-  }catch(e){ /* si falla, probamos de nuevo en el próximo ciclo */ }
-}
-setInterval(()=>{
-  if(document.hidden) return; // no gastamos llamadas si la pestaña no está en foco
-  autoSyncTeamTasks();
-  autoSyncPersonalTasks();
-}, 20000);
 </script>
 </body>
 </html>
