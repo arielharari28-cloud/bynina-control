@@ -1428,8 +1428,8 @@ function taskRecursOnDate(t, dateStr){
 }
 
 /* ===== Estado de la tarea (Pendiente / En proceso / Finalizado) ===== */
-const TASK_STATUS = {pendiente:'Pendiente', proceso:'En proceso', finalizado:'Finalizado'};
-const TASK_STATUS_COLOR = {pendiente:'#8b4a2b', proceso:'#5b4e9e', finalizado:'#2f6b4f'};
+const TASK_STATUS = {pendiente:'Pendiente', proceso:'En proceso', depende:'Depende de otra persona', finalizado:'Finalizado'};
+const TASK_STATUS_COLOR = {pendiente:'#8b4a2b', proceso:'#5b4e9e', depende:'#b45309', finalizado:'#2f6b4f'};
 function getTaskStatusForDate(t, dateStr){
   if(taskRepeatType(t) !== 'none'){
     return (t.statusDates && t.statusDates[dateStr]) || 'pendiente';
@@ -1450,6 +1450,21 @@ function setTaskStatusForDate(t, dateStr, status){
 function taskStatusSelectHtml(t, dateStr){
   const current = getTaskStatusForDate(t, dateStr);
   return Object.entries(TASK_STATUS).map(([k,v])=>`<option value="${k}" ${k===current?'selected':''}>${v}</option>`).join('');
+}
+function dependeBadgeHtml(t, dateStr){
+  const status = getTaskStatusForDate(t, dateStr);
+  if(status !== 'depende' || !t.dependeDe) return '';
+  return `<span class="due-badge" style="background:#fef3c7;color:#92400e">⏳ Depende de: ${escapeHtml(t.dependeDe)}</span>`;
+}
+// Devuelve false (y no cambia nada) si el usuario cancela el prompt de "depende de quién".
+function applyStatusChange(t, dKey, newStatus){
+  if(newStatus === 'depende'){
+    const who = prompt('¿De quién depende esta tarea?', t.dependeDe || '');
+    if(who === null) return false;
+    t.dependeDe = who.trim();
+  }
+  setTaskStatusForDate(t, dKey, newStatus);
+  return true;
 }
 
 // ===== Vista de empleado (link propio por persona) =====
@@ -1739,7 +1754,7 @@ function renderLists(){
       const t = teamTasks.find(x=>x.id===sel.dataset.id);
       if(!t) return;
       const dKey = currentOccurrenceKey(t);
-      setTaskStatusForDate(t, dKey, sel.value);
+      if(!applyStatusChange(t, dKey, sel.value)){ renderLists(); return; }
       if(t.linkedPersonalTaskId){
         const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
         if(pt && syncLinkedDoneStatus(t, pt, dKey)){
@@ -1989,6 +2004,7 @@ function teamTicketHtml(t){
           ${categoryTagHtml(t)}
           ${t.sharedWithMe?'<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Compartida conmigo</span>':''}
           <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, currentOccurrenceKey(t))}</select>
+          ${dependeBadgeHtml(t, currentOccurrenceKey(t))}
           <span class="ticket-time">${fmtTime(t.ts)}</span>
           ${timeLabel}
           ${dueLabel}
@@ -2016,7 +2032,7 @@ function teamTaskRowHtml(t){
   return `
     <div class="check-item check-team-item">
       <div class="ticket-check team-check" data-id="${t.id}">${done?'✓':''}</div>
-      <label class="check-team-label">${categoryTagHtml(t)} <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, currentOccurrenceKey(t))}</select> ${escapeHtml(t.text)} ${timeLabel} ${dueLabel}</label>
+      <label class="check-team-label">${categoryTagHtml(t)} <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, currentOccurrenceKey(t))}</select> ${dependeBadgeHtml(t, currentOccurrenceKey(t))} ${escapeHtml(t.text)} ${timeLabel} ${dueLabel}</label>
       ${undoBtn}
       ${catchUpBtn}
       ${postponeBtn}
@@ -2043,6 +2059,7 @@ function employeeTicketHtml(t){
         <div class="ticket-meta">
           ${categoryTagHtml(t)}
           <select class="task-status-select" data-id="${t.id}">${taskStatusSelectHtml(t, currentOccurrenceKey(t))}</select>
+          ${dependeBadgeHtml(t, currentOccurrenceKey(t))}
           ${timeLabel}
           ${dueLabel}
         </div>
@@ -2124,7 +2141,7 @@ function renderEmployeeView(){
       const t = teamTasks.find(x=>x.id===sel.dataset.id);
       if(!t) return;
       const dKey = currentOccurrenceKey(t);
-      setTaskStatusForDate(t, dKey, sel.value);
+      if(!applyStatusChange(t, dKey, sel.value)){ renderEmployeeView(); return; }
       if(t.linkedPersonalTaskId){
         const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
         if(pt && syncLinkedDoneStatus(t, pt, dKey)){
@@ -2343,8 +2360,54 @@ let editingTeamTaskDateStr = null;
 
 function populateEditPersonSelect(){
   const sel = document.getElementById('edit-task-person');
-  sel.innerHTML = Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('') +
+  sel.innerHTML = '<option value="ariel">Ariel (vos)</option>' +
+    Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('') +
     '<option value="__new_person__">+ Nueva persona...</option>';
+}
+
+// Cuando Ariel reasigna una tarea de equipo a sí mismo: deja de ser una tarea de un empleado
+// y pasa a ser una tarea propia en Mi Día (si ya tenía una copia compartida, esa copia queda
+// como la tarea real; si no, se crea una nueva).
+async function transferTeamTaskToMe(t){
+  if(t.linkedPersonalTaskId){
+    const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
+    if(pt){
+      delete pt.linkedTeamTaskId;
+      delete pt.assignedViaResponsable;
+      if(Array.isArray(pt.linkedTeamTaskIds)) delete pt.linkedTeamTaskIds;
+    } else {
+      personalTasks.push({
+        id: 'tk'+Date.now()+Math.random().toString(36).slice(2,7),
+        area: 'nina',
+        text: t.text,
+        dueDate: t.dueDate || '',
+        time: t.time || '',
+        ts: Date.now(),
+        resolved: !!t.resolved,
+        repeat: taskRepeatType(t),
+        important: !!t.important
+      });
+    }
+  } else {
+    personalTasks.push({
+      id: 'tk'+Date.now()+Math.random().toString(36).slice(2,7),
+      area: 'nina',
+      text: t.text,
+      dueDate: t.dueDate || '',
+      time: t.time || '',
+      ts: Date.now(),
+      resolved: !!t.resolved,
+      repeat: taskRepeatType(t),
+      important: !!t.important
+    });
+  }
+  teamTasks = teamTasks.filter(x=>x.id!==t.id);
+  renderPersonalTasks();
+  renderLists();
+  refreshCalendars();
+  await savePersonalTasks();
+  await saveTeamTasks();
+  setStatus('pasó a ser tu responsabilidad — ahora está en Mi Día');
 }
 
 function openEditTeamTask(id){
@@ -2378,8 +2441,20 @@ async function saveEditTeamTask(){
   if(!t) return;
   const newText = document.getElementById('edit-task-text').value.trim();
   if(!newText) return;
+  const selectedPerson = employeePersona ? employeePersona : document.getElementById('edit-task-person').value;
+  if(selectedPerson === 'ariel'){
+    // Antes de transferir, guardamos los últimos cambios de texto/fecha/hora que haya hecho en el modal.
+    t.text = newText;
+    t.category = document.getElementById('edit-task-category').value;
+    t.dueDate = document.getElementById('edit-task-due').value || '';
+    t.time = document.getElementById('edit-task-time').value || '';
+    t.important = document.getElementById('edit-task-important').checked;
+    closeEditTeamTask();
+    await transferTeamTaskToMe(t);
+    return;
+  }
   t.text = newText;
-  t.person = employeePersona ? employeePersona : document.getElementById('edit-task-person').value;
+  t.person = selectedPerson;
   t.category = document.getElementById('edit-task-category').value;
   const newDueDate = document.getElementById('edit-task-due').value || '';
   const dueDateChanged = newDueDate !== (t.dueDate || '');
@@ -2395,7 +2470,7 @@ async function saveEditTeamTask(){
     t.doneDates = {};
   }
   const statusDateKey = dueDateChanged ? newDueDate : (editingTeamTaskDateStr || todayKey());
-  setTaskStatusForDate(t, statusDateKey, document.getElementById('edit-task-status').value);
+  applyStatusChange(t, statusDateKey, document.getElementById('edit-task-status').value);
   if(!employeePersona){
     const sharedNow = document.getElementById('edit-task-shared').checked;
     if(sharedNow && !t.sharedWithMe){
@@ -3240,6 +3315,7 @@ function renderDaySummaryTeam(){
       ${personTag(t)}
       <span class="summary-text">${escapeHtml(t.text)}</span>
       ${importantBadgeHtml(t)}
+      ${dependeBadgeHtml(t, currentOccurrenceKey(t))}
       ${dateLabel(t)}
       <button class="edit-btn summary-edit-team" data-id="${t.id}" title="Editar">✎</button>
     </div>
@@ -3253,6 +3329,7 @@ function renderDaySummaryTeam(){
         ${personTag(t)}
         <span class="summary-text">${escapeHtml(t.text)}</span>
         ${importantBadgeHtml(t)}
+        ${dependeBadgeHtml(t, currentOccurrenceKey(t))}
         ${dateLabel(t)}
         <button class="edit-btn summary-edit-team" data-id="${t.id}" title="Editar">✎</button>
       </div>
@@ -3683,7 +3760,7 @@ function renderCalDayTeamTasks(){
     sel.addEventListener('change', async ()=>{
       const t = teamTasks.find(x=>x.id===sel.dataset.id);
       if(!t) return;
-      setTaskStatusForDate(t, calModalDateKey, sel.value);
+      if(!applyStatusChange(t, calModalDateKey, sel.value)){ refreshOpenCalDayModal(); return; }
       renderLists();
       renderChecklist();
       refreshCalendars();
