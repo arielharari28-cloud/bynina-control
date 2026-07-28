@@ -1194,6 +1194,40 @@ async function fbSet(path, value){
   return db.ref(path).set(value);
 }
 
+/* ===== Merge seguro de listas (evita que se pisen los cambios entre usuarios) =====
+   Compara lo que había cuando cargamos (baseline) contra lo que tenemos ahora en
+   pantalla (local) y contra lo último que hay en Firebase (server, que puede tener
+   cambios de otras personas que guardaron mientras tanto). El resultado aplica
+   SOLO lo que cambió localmente (altas, ediciones, bajas) sobre la base más
+   reciente del servidor, así nadie borra sin querer lo que cargó otro. */
+function mergeTaskArrays(baseline, local, server){
+  const baseMap = new Map((baseline||[]).map(t=>[t.id, t]));
+  const localMap = new Map((local||[]).map(t=>[t.id, t]));
+  const resultMap = new Map((server||[]).map(t=>[t.id, t]));
+
+  // Altas y ediciones locales: se aplican sobre la base del servidor.
+  localMap.forEach((localTask, id)=>{
+    const baseTask = baseMap.get(id);
+    if(!baseTask){
+      // Tarea nueva creada localmente desde la última carga.
+      resultMap.set(id, localTask);
+    } else if(JSON.stringify(baseTask) !== JSON.stringify(localTask)){
+      // Tarea que se editó localmente: nuestra versión gana para ese registro puntual.
+      resultMap.set(id, localTask);
+    }
+    // Si no cambió localmente, se deja tal cual esté en el servidor (por si otro la editó).
+  });
+
+  // Bajas locales: si algo que existía en baseline ya no está en local, se borró acá.
+  baseMap.forEach((baseTask, id)=>{
+    if(!localMap.has(id)){
+      resultMap.delete(id);
+    }
+  });
+
+  return Array.from(resultMap.values());
+}
+
 const PEOPLE = {
   general:'General', emir:'Emir', aripchico:'Ari Chico', ale:'Ale',
   noemi:'Noemi', flor:'Flor', carol:'Carol', noelia:'Noelia',
@@ -1856,6 +1890,7 @@ async function loadChecklistEditMode(){
 
 const TEAM_TASKS_KEY = 'control-bynina:team-tasks';
 let teamTasks = [];
+let teamTasksBaseline = []; // última foto conocida del servidor, para poder comparar qué cambiamos nosotros
 
 async function loadTeamTasks(){
   try{
@@ -1864,11 +1899,23 @@ async function loadTeamTasks(){
   }catch(e){
     teamTasks = [];
   }
+  teamTasksBaseline = JSON.parse(JSON.stringify(teamTasks));
 }
 
 async function saveTeamTasks(){
   try{
-    await fbSet('control_bynina/team_tasks', JSON.stringify(teamTasks));
+    // Antes de guardar, traemos lo último del servidor (puede tener cambios de otra persona)
+    // y combinamos: solo aplicamos lo que cambiamos nosotros, sin pisar el resto.
+    let serverTasks = teamTasksBaseline;
+    try{
+      const val = await fbGet('control_bynina/team_tasks');
+      serverTasks = val ? JSON.parse(val) : [];
+    }catch(e){ /* si falla la relectura, seguimos con la última base conocida */ }
+    const merged = mergeTaskArrays(teamTasksBaseline, teamTasks, serverTasks);
+    await fbSet('control_bynina/team_tasks', JSON.stringify(merged));
+    teamTasks = merged;
+    teamTasksBaseline = JSON.parse(JSON.stringify(merged));
+    renderLists();
     setStatus('guardado ' + fmtTime(Date.now()));
   }catch(e){
     setStatus('error al guardar');
@@ -2518,6 +2565,8 @@ document.getElementById('go-today').addEventListener('click', ()=>{
 
 const PERSONAL_TASKS_KEY = 'mi-dia:tasks';
 
+let personalTasksBaseline = []; // última foto conocida del servidor, para poder comparar qué cambiamos nosotros
+
 async function loadPersonalTasks(){
   try{
     const val = await fbGet('control_bynina/personal_tasks');
@@ -2525,11 +2574,23 @@ async function loadPersonalTasks(){
   }catch(e){
     personalTasks = [];
   }
+  personalTasksBaseline = JSON.parse(JSON.stringify(personalTasks));
 }
 
 async function savePersonalTasks(){
   try{
-    await fbSet('control_bynina/personal_tasks', JSON.stringify(personalTasks));
+    // Igual que con las tareas de equipo: releemos el servidor y combinamos,
+    // para no pisar lo que haya guardado otra persona mientras tanto.
+    let serverTasks = personalTasksBaseline;
+    try{
+      const val = await fbGet('control_bynina/personal_tasks');
+      serverTasks = val ? JSON.parse(val) : [];
+    }catch(e){ /* si falla la relectura, seguimos con la última base conocida */ }
+    const merged = mergeTaskArrays(personalTasksBaseline, personalTasks, serverTasks);
+    await fbSet('control_bynina/personal_tasks', JSON.stringify(merged));
+    personalTasks = merged;
+    personalTasksBaseline = JSON.parse(JSON.stringify(merged));
+    renderPersonalTasks();
   }catch(e){}
 }
 
@@ -3746,6 +3807,37 @@ document.querySelectorAll('.emp-tab-btn').forEach(btn=>{
     document.getElementById('employee-tab-nav').style.display = 'flex';
   }
 })();
+
+/* ===== Sincronización automática =====
+   Cada 20s trae lo último de Firebase y lo combina con lo que tenemos en
+   pantalla, para que si otra persona guardó algo mientras tenías la página
+   abierta, lo veas sin tener que recargar — y sin perder nada tuyo. */
+async function autoSyncTeamTasks(){
+  try{
+    const val = await fbGet('control_bynina/team_tasks');
+    const serverTasks = val ? JSON.parse(val) : [];
+    const merged = mergeTaskArrays(teamTasksBaseline, teamTasks, serverTasks);
+    teamTasks = merged;
+    teamTasksBaseline = JSON.parse(JSON.stringify(merged));
+    if(typeof renderLists === 'function' && document.getElementById('pending-list')) renderLists();
+    if(typeof renderEmployeeView === 'function' && employeePersona) renderEmployeeView();
+  }catch(e){ /* si falla, probamos de nuevo en el próximo ciclo */ }
+}
+async function autoSyncPersonalTasks(){
+  try{
+    const val = await fbGet('control_bynina/personal_tasks');
+    const serverTasks = val ? JSON.parse(val) : [];
+    const merged = mergeTaskArrays(personalTasksBaseline, personalTasks, serverTasks);
+    personalTasks = merged;
+    personalTasksBaseline = JSON.parse(JSON.stringify(merged));
+    if(typeof renderPersonalTasks === 'function') renderPersonalTasks();
+  }catch(e){ /* si falla, probamos de nuevo en el próximo ciclo */ }
+}
+setInterval(()=>{
+  if(document.hidden) return; // no gastamos llamadas si la pestaña no está en foco
+  autoSyncTeamTasks();
+  autoSyncPersonalTasks();
+}, 20000);
 </script>
 </body>
 </html>
