@@ -1160,6 +1160,14 @@
       <label for="edit-ptask-text">Tarea</label>
       <textarea id="edit-ptask-text"></textarea>
     </div>
+    <div class="modal-field">
+      <label for="edit-ptask-status">Estado</label>
+      <select id="edit-ptask-status"></select>
+    </div>
+    <div class="modal-field" id="edit-ptask-person-field">
+      <label for="edit-ptask-person">Responsable</label>
+      <select id="edit-ptask-person"></select>
+    </div>
     <label class="check-row">
       <input type="checkbox" id="edit-ptask-repeat">
       🔁 Se repite todos los días
@@ -2405,7 +2413,14 @@ let editingTeamTaskDateStr = null;
 
 function populateEditPersonSelect(){
   const sel = document.getElementById('edit-task-person');
-  sel.innerHTML = Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('');
+  sel.innerHTML = `<option value="ariel">Ariel (vos)</option>` +
+    Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('');
+}
+
+function populateEditPtaskPersonSelect(){
+  const sel = document.getElementById('edit-ptask-person');
+  sel.innerHTML = `<option value="">— (solo yo)</option>` +
+    Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('');
 }
 
 function openEditTeamTask(id){
@@ -2438,8 +2453,21 @@ async function saveEditTeamTask(){
   if(!t) return;
   const newText = document.getElementById('edit-task-text').value.trim();
   if(!newText) return;
+  const selectedPerson = employeePersona ? employeePersona : document.getElementById('edit-task-person').value;
+  if(selectedPerson === 'ariel'){
+    // Guardamos los últimos cambios de texto/fecha/hora antes de pasarla a Mi Día.
+    t.text = newText;
+    t.category = document.getElementById('edit-task-category').value;
+    t.dueDate = document.getElementById('edit-task-due').value || '';
+    t.time = document.getElementById('edit-task-time').value || '';
+    t.repeat = document.getElementById('edit-task-repeat').value;
+    delete t.repeatDaily;
+    closeEditTeamTask();
+    await transferTeamTaskToMe(t);
+    return;
+  }
   t.text = newText;
-  t.person = employeePersona ? employeePersona : document.getElementById('edit-task-person').value;
+  t.person = selectedPerson;
   t.category = document.getElementById('edit-task-category').value;
   const newDueDate = document.getElementById('edit-task-due').value || '';
   const dueDateChanged = newDueDate !== (t.dueDate || '');
@@ -2477,6 +2505,45 @@ async function saveEditTeamTask(){
   refreshCalendars();
   refreshOpenCalDayModal();
   await saveTeamTasks();
+}
+
+async function transferTeamTaskToMe(t){
+  if(t.linkedPersonalTaskId){
+    const pt = personalTasks.find(x=>x.id===t.linkedPersonalTaskId);
+    if(pt){
+      delete pt.linkedTeamTaskId;
+    } else {
+      personalTasks.push({
+        id: 'tk'+Date.now()+Math.random().toString(36).slice(2,7),
+        area: 'nina',
+        text: t.text,
+        dueDate: t.dueDate || '',
+        time: t.time || '',
+        ts: Date.now(),
+        resolved: !!t.resolved,
+        repeatDaily: taskRepeatType(t)==='daily'
+      });
+    }
+  } else {
+    personalTasks.push({
+      id: 'tk'+Date.now()+Math.random().toString(36).slice(2,7),
+      area: 'nina',
+      text: t.text,
+      dueDate: t.dueDate || '',
+      time: t.time || '',
+      ts: Date.now(),
+      resolved: !!t.resolved,
+      repeatDaily: taskRepeatType(t)==='daily'
+    });
+  }
+  teamTasks = teamTasks.filter(x=>x.id!==t.id);
+  renderPersonalTasks();
+  renderLists();
+  renderChecklist();
+  refreshCalendars();
+  await savePersonalTasks();
+  await saveTeamTasks();
+  setStatus('pasó a ser tu responsabilidad — ahora está en Mi Día');
 }
 
 document.getElementById('edit-task-cancel').addEventListener('click', closeEditTeamTask);
@@ -2639,13 +2706,10 @@ function personalTaskHtml(t){
     (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
   const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
   const postponeBtn = t.repeatDaily ? '' : `<button class="edit-btn ptask-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
-  let responsableLabel = '';
-  if(t.linkedTeamTaskId){
-    const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
-    if(tt && tt.person && tt.person!=='general'){
-      responsableLabel = `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(PEOPLE[tt.person]||tt.person)}</span>`;
-    }
-  }
+  const responsableName = personalTaskResponsibleName(t);
+  const responsableLabel = responsableName ? `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(responsableName)}</span>` : '';
+  const statusVal = getTaskStatusForDate(t, todayKey());
+  const statusSelectHtml = `<select class="task-status-select ptask-status-select" data-id="${t.id}" style="color:${TASK_STATUS_COLOR[statusVal]}">${taskStatusSelectHtml(t, todayKey())}</select>`;
   return `
     <div class="ticket ${done?'resolved':''} ${responsableLabel?'shared-ticket':''}">
       <div class="ticket-check ptask-check" data-id="${t.id}">${done?'✓':''}</div>
@@ -2655,6 +2719,7 @@ function personalTaskHtml(t){
           ${responsableLabel}
           ${timeLabel}
           ${dueLabel}
+          ${statusSelectHtml}
         </div>
         <div class="ticket-text">${escapeHtml(t.text)}</div>
         ${t.photoUrl ? `<img class="ptask-photo" src="${t.photoUrl}" data-full="${t.photoUrl}">` : ''}
@@ -2673,6 +2738,7 @@ function personalTaskResponsibleName(t){
     const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
     if(tt && tt.person && tt.person!=='general') return PEOPLE[tt.person] || tt.person;
   }
+  if(t.assignedPerson && t.assignedPerson!=='general') return PEOPLE[t.assignedPerson] || t.assignedPerson;
   return null;
 }
 
@@ -2777,6 +2843,27 @@ function renderPersonalTasks(){
       await savePersonalTasks();
     });
   });
+  el.querySelectorAll('.ptask-status-select').forEach(sel=>{
+    sel.addEventListener('click', (e)=>e.stopPropagation());
+    sel.addEventListener('change', async (e)=>{
+      e.stopPropagation();
+      const t = personalTasks.find(x=>x.id===sel.dataset.id);
+      if(!t) return;
+      setTaskStatusForDate(t, todayKey(), sel.value);
+      renderPersonalTasks();
+      refreshCalendars();
+      if(t.linkedTeamTaskId){
+        const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
+        if(tt){
+          setTaskStatusForDate(tt, nextRecurrence(tt), sel.value);
+          renderLists();
+          renderChecklist();
+          await saveTeamTasks();
+        }
+      }
+      await savePersonalTasks();
+    });
+  });
   renderDaySummary();
 }
 
@@ -2828,6 +2915,13 @@ function openEditPersonalTask(id){
   document.getElementById('edit-ptask-time').value = t.time || '';
   document.getElementById('edit-ptask-text').value = t.text;
   document.getElementById('edit-ptask-repeat').checked = !!t.repeatDaily;
+  document.getElementById('edit-ptask-status').innerHTML = taskStatusSelectHtml(t, todayKey());
+  populateEditPtaskPersonSelect();
+  const personSel = document.getElementById('edit-ptask-person');
+  personSel.value = t.assignedPerson || '';
+  const linkedToTeam = !!t.linkedTeamTaskId;
+  personSel.disabled = linkedToTeam;
+  document.getElementById('edit-ptask-person-field').style.opacity = linkedToTeam ? '0.5' : '1';
   document.getElementById('edit-ptask-modal').classList.add('open');
 }
 
@@ -2873,8 +2967,13 @@ async function saveEditPersonalTask(){
   t.dueDate = document.getElementById('edit-ptask-due').value || '';
   t.time = document.getElementById('edit-ptask-time').value || '';
   t.repeatDaily = document.getElementById('edit-ptask-repeat').checked;
+  setTaskStatusForDate(t, todayKey(), document.getElementById('edit-ptask-status').value);
+  if(!t.linkedTeamTaskId){
+    t.assignedPerson = document.getElementById('edit-ptask-person').value || '';
+  }
   closeEditPersonalTask();
   renderPersonalTasks();
+  refreshCalendars();
   await savePersonalTasks();
 }
 
@@ -2911,6 +3010,11 @@ function renderDaySummary(){
   const pendingLabel = (t) => (t.dueDate && t.dueDate !== todayStr) ?
     `<span class="due-badge">pendiente</span>` : '';
 
+  const statusSelectHtml = (t) => {
+    const statusVal = getTaskStatusForDate(t, todayStr);
+    return `<select class="task-status-select summary-status-select" data-id="${t.id}" style="color:${TASK_STATUS_COLOR[statusVal]}">${taskStatusSelectHtml(t, todayStr)}</select>`;
+  };
+
   let html = withTime.map(t => {
     const responsableName = personalTaskResponsibleName(t);
     const responsableLabel = responsableName ? `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(responsableName)}</span>` : '';
@@ -2921,6 +3025,7 @@ function renderDaySummary(){
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
       ${responsableLabel}
       ${overdueLabel(t)}
+      ${statusSelectHtml(t)}
     </div>
   `;
   }).join('');
@@ -2936,6 +3041,7 @@ function renderDaySummary(){
         <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
         ${responsableLabel}
         ${pendingLabel(t)}
+        ${statusSelectHtml(t)}
       </div>
     `;
     }).join('');
@@ -2946,6 +3052,28 @@ function renderDaySummary(){
     chk.addEventListener('click', (e)=>{
       e.stopPropagation();
       togglePersonalTaskResolved(chk.dataset.id);
+    });
+  });
+
+  el.querySelectorAll('.summary-status-select').forEach(sel=>{
+    sel.addEventListener('click', (e)=>e.stopPropagation());
+    sel.addEventListener('change', async (e)=>{
+      e.stopPropagation();
+      const t = personalTasks.find(x=>x.id===sel.dataset.id);
+      if(!t) return;
+      setTaskStatusForDate(t, todayStr, sel.value);
+      renderPersonalTasks();
+      refreshCalendars();
+      if(t.linkedTeamTaskId){
+        const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
+        if(tt){
+          setTaskStatusForDate(tt, nextRecurrence(tt), sel.value);
+          renderLists();
+          renderChecklist();
+          await saveTeamTasks();
+        }
+      }
+      await savePersonalTasks();
     });
   });
 
