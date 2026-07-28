@@ -987,6 +987,10 @@
     <div class="section-title st-green" id="summary-section-title">Resumen de tu día</div>
     <div class="day-summary-card" id="day-summary"></div>
 
+    <div class="section-title st-purple">Pendientes por persona</div>
+    <div class="filters" id="midia-person-filter"></div>
+    <div id="midia-team-tasks"></div>
+
     <div class="section-title st-rust">Mis tareas</div>
     <div class="capture">
       <div class="capture-row">
@@ -1736,6 +1740,77 @@ function renderLists(){
     btn.addEventListener('click', ()=>undoTeamTaskCompletion(btn.dataset.id));
   });
   document.querySelectorAll('#pending-list .task-status-select, #resolved-list .task-status-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const t = teamTasks.find(x=>x.id===sel.dataset.id);
+      if(!t) return;
+      setTaskStatusForDate(t, nextRecurrence(t), sel.value);
+      renderLists();
+      renderChecklist();
+      refreshCalendars();
+      await saveTeamTasks();
+    });
+  });
+  renderMidiaPersonTasks();
+}
+
+let midiaFilterPerson = '';
+
+function renderMidiaPersonFilter(){
+  const el = document.getElementById('midia-person-filter');
+  if(!el) return;
+  const keys = ['todos', ...Object.keys(ACTIVE_PEOPLE)];
+  el.innerHTML = keys.map(k=>{
+    const label = k==='todos' ? 'Todos' : PEOPLE[k];
+    return `<div class="chip ${midiaFilterPerson===k?'active':''}" data-key="${k}">${label}</div>`;
+  }).join('');
+  el.querySelectorAll('.chip').forEach(c=>{
+    c.addEventListener('click', ()=>{
+      midiaFilterPerson = midiaFilterPerson===c.dataset.key ? '' : c.dataset.key;
+      renderMidiaPersonFilter();
+      renderMidiaPersonTasks();
+    });
+  });
+}
+
+function renderMidiaPersonTasks(){
+  const el = document.getElementById('midia-team-tasks');
+  if(!el) return;
+  if(!midiaFilterPerson){
+    el.innerHTML = '<div class="empty">Elegí una persona arriba para ver sus pendientes.</div>';
+    return;
+  }
+  const filtered = midiaFilterPerson==='todos' ? teamTasks : teamTasks.filter(t=>t.person===midiaFilterPerson);
+  const todayStr = todayKey();
+  const pending = filtered.filter(t=>taskRepeatType(t)!=='none' || !isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
+    const da = effectiveDueKey(a), db = effectiveDueKey(b);
+    if(da && db){
+      const cmp = da.localeCompare(db);
+      if(cmp !== 0) return cmp;
+      return (a.time||'').localeCompare(b.time||'');
+    }
+    if(da) return -1;
+    if(db) return 1;
+    return b.ts - a.ts;
+  });
+  el.innerHTML = pending.length ? pending.map(teamTicketHtml).join('') :
+    '<div class="empty">No hay pendientes para esta persona. 🎉</div>';
+
+  el.querySelectorAll('.team-check').forEach(btn=>{
+    btn.addEventListener('click', ()=>toggleTeamTaskResolved(btn.dataset.id));
+  });
+  el.querySelectorAll('.team-del').forEach(btn=>{
+    btn.addEventListener('click', ()=>deleteTeamTask(btn.dataset.id));
+  });
+  el.querySelectorAll('.team-edit').forEach(btn=>{
+    btn.addEventListener('click', ()=>openEditTeamTask(btn.dataset.id));
+  });
+  el.querySelectorAll('.team-postpone').forEach(btn=>{
+    btn.addEventListener('click', ()=>postponeTeamTask(btn.dataset.id));
+  });
+  el.querySelectorAll('.task-undo').forEach(btn=>{
+    btn.addEventListener('click', ()=>undoTeamTaskCompletion(btn.dataset.id));
+  });
+  el.querySelectorAll('.task-status-select').forEach(sel=>{
     sel.addEventListener('change', async ()=>{
       const t = teamTasks.find(x=>x.id===sel.dataset.id);
       if(!t) return;
@@ -2922,6 +2997,8 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   document.getElementById('task-due-date').value = dateKey(new Date());
   renderDateHeader();
   renderTaskFilters();
+  renderMidiaPersonFilter();
+  renderMidiaPersonTasks();
   await loadPersonalTasks();
   renderPersonalTasks();
 })();
