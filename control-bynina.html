@@ -1418,6 +1418,23 @@ function nextDayKey(dateStr){
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function prevDayKey(dateStr){
+  const base = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+  base.setDate(base.getDate() - 1);
+  const yyyy = base.getFullYear();
+  const mm = String(base.getMonth()+1).padStart(2,'0');
+  const dd = String(base.getDate()).padStart(2,'0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// Para tareas que se repiten: ¿quedó pendiente (sin finalizar) en alguna ocurrencia anterior a hoy?
+// Miramos el historial de statusDates guardado y buscamos si hay algún día previo sin "finalizado".
+function repeatingTaskPendingFromBefore(t, todayStr){
+  if(taskRepeatType(t) === 'none') return false;
+  if(!t.statusDates) return false;
+  return Object.keys(t.statusDates).some(dStr => dStr < todayStr && t.statusDates[dStr] !== 'finalizado');
+}
+
 // Una tarea que se repite no tiene un único "resolved": se marca hecha por día (doneDates).
 // Una tarea normal sigue usando el campo resolved de siempre.
 function isTaskDoneForDate(t, dateStr){
@@ -3005,10 +3022,25 @@ function renderDaySummary(){
     return (a.order ?? a.ts) - (b.order ?? b.ts);
   });
 
-  const overdueLabel = (t) => (t.dueDate && t.dueDate !== todayStr) ?
-    `<span class="due-badge overdue">atrasada · venció ${fmtDue(t.dueDate)}</span>` : '';
-  const pendingLabel = (t) => (t.dueDate && t.dueDate !== todayStr) ?
-    `<span class="due-badge">pendiente</span>` : '';
+  // Las tareas que se repiten todos los días NUNCA deben mostrarse como "vencidas": su dueDate
+  // es solo la fecha original de creación, no una fecha límite. Si vienen arrastrando una
+  // ocurrencia anterior sin resolver, avisamos con "pendiente anterior" en vez de "venció".
+  const overdueLabel = (t) => {
+    if(taskRepeatType(t) !== 'none'){
+      return repeatingTaskPendingFromBefore(t, todayStr) ?
+        `<span class="due-badge overdue">pendiente anterior</span>` : '';
+    }
+    return (t.dueDate && t.dueDate !== todayStr) ?
+      `<span class="due-badge overdue">atrasada · venció ${fmtDue(t.dueDate)}</span>` : '';
+  };
+  const pendingLabel = (t) => {
+    if(taskRepeatType(t) !== 'none'){
+      return repeatingTaskPendingFromBefore(t, todayStr) ?
+        `<span class="due-badge overdue">pendiente anterior</span>` : '';
+    }
+    return (t.dueDate && t.dueDate !== todayStr) ?
+      `<span class="due-badge">pendiente</span>` : '';
+  };
 
   const statusSelectHtml = (t) => {
     const statusVal = getTaskStatusForDate(t, todayStr);
@@ -3026,6 +3058,7 @@ function renderDaySummary(){
       ${responsableLabel}
       ${overdueLabel(t)}
       ${statusSelectHtml(t)}
+      <button class="edit-btn summary-edit" data-id="${t.id}" title="Editar">✎</button>
     </div>
   `;
   }).join('');
@@ -3042,6 +3075,7 @@ function renderDaySummary(){
         ${responsableLabel}
         ${pendingLabel(t)}
         ${statusSelectHtml(t)}
+        <button class="edit-btn summary-edit" data-id="${t.id}" title="Editar">✎</button>
       </div>
     `;
     }).join('');
@@ -3052,6 +3086,13 @@ function renderDaySummary(){
     chk.addEventListener('click', (e)=>{
       e.stopPropagation();
       togglePersonalTaskResolved(chk.dataset.id);
+    });
+  });
+
+  el.querySelectorAll('.summary-edit').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openEditPersonalTask(btn.dataset.id);
     });
   });
 
