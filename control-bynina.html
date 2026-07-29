@@ -549,6 +549,13 @@
   .ptask-date-group:first-child{margin-top:0;}
   .ptask-date-group-resolved{color:var(--green);}
 
+  .ptask-person-group{
+    font-family:'Poppins',sans-serif;font-size:14px;font-weight:700;
+    color:var(--purple, #5b4e9e);margin:22px 0 6px;padding:6px 10px;
+    background:#ede9fe;border-radius:8px;
+  }
+  .ptask-person-group:first-child{margin-top:0;}
+
   .empty{
     font-family:'Inter',sans-serif;
     font-size:13px;
@@ -1002,6 +1009,7 @@
           <option value="otros">Otros clientes</option>
           <option value="personal">Personal</option>
         </select>
+        <select id="task-person"></select>
         <input type="date" id="task-due-date">
         <input type="time" id="task-time-input">
         <textarea id="task-text-input" placeholder="Qué tenés que hacer..."></textarea>
@@ -1227,7 +1235,7 @@ async function fbSet(path, value){
 }
 
 const PEOPLE = {
-  general:'General', emir:'Emir', aripchico:'Ari Chico', ale:'Ale',
+  general:'General', ariel:'Ari', emir:'Emir', aripchico:'Ari Chico', ale:'Ale',
   noemi:'Noemi', flor:'Flor', carol:'Carol', noelia:'Noelia',
   stef:'Stef', meli:'Meli', nahuel:'Nahuel', peque:'Peque'
 };
@@ -2436,8 +2444,15 @@ function populateEditPersonSelect(){
 
 function populateEditPtaskPersonSelect(){
   const sel = document.getElementById('edit-ptask-person');
-  sel.innerHTML = `<option value="">— (solo yo)</option>` +
+  sel.innerHTML = `<option value="">Sin responsable (a revisar)</option>` +
     Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('');
+}
+
+function populateTaskPersonSelect(){
+  const sel = document.getElementById('task-person');
+  if(!sel) return;
+  sel.innerHTML = Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('');
+  sel.value = 'ariel';
 }
 
 function openEditTeamTask(id){
@@ -2702,9 +2717,10 @@ async function savePersonalTasks(){
 
 function renderTaskFilters(){
   const el = document.getElementById('task-filters');
-  const keys = ['todas', ...Object.keys(AREAS)];
+  const keys = ['todas', 'sinresp', ...Object.keys(AREAS)];
+  const unassignedCount = personalTasks.filter(t=>!t.assignedPerson).length;
   el.innerHTML = keys.map(k=>{
-    const label = k==='todas' ? 'Todas' : AREAS[k];
+    const label = k==='todas' ? 'Todas' : k==='sinresp' ? `⚠️ Sin responsable${unassignedCount?` (${unassignedCount})`:''}` : AREAS[k];
     return `<div class="chip ${taskFilter===k?'active':''}" data-key="${k}">${label}</div>`;
   }).join('');
   el.querySelectorAll('.chip').forEach(c=>{
@@ -2755,8 +2771,16 @@ function personalTaskResponsibleName(t){
     const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
     if(tt && tt.person && tt.person!=='general') return PEOPLE[tt.person] || tt.person;
   }
-  if(t.assignedPerson && t.assignedPerson!=='general') return PEOPLE[t.assignedPerson] || t.assignedPerson;
+  if(t.assignedPerson && t.assignedPerson!=='general' && t.assignedPerson!=='ariel') return PEOPLE[t.assignedPerson] || t.assignedPerson;
   return null;
+}
+
+// A diferencia de personalTaskResponsibleName (que no muestra nada para las
+// tareas de Ari, porque esa es la vista "por defecto"), esta función se usa
+// para agrupar por responsable en vistas donde se ven tareas de todos (ej. By Nina).
+function personalTaskAssignedLabel(t){
+  if(t.assignedPerson) return PEOPLE[t.assignedPerson] || t.assignedPerson;
+  return 'Sin responsable';
 }
 
 function personalTaskDateGroupLabel(dStr, todayStr){
@@ -2778,18 +2802,9 @@ function sortPersonalTaskGroup(arr){
   });
 }
 
-function renderPersonalTasks(){
-  const el = document.getElementById('task-list');
-  const filtered = taskFilter==='todas' ? personalTasks : personalTasks.filter(t=>t.area===taskFilter);
-  const todayStr = todayKey();
-  const pending = filtered.filter(t=>!isTaskDoneForDate(t, todayStr));
-  const resolved = filtered.filter(t=>isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
-  if(!filtered.length){
-    el.innerHTML = '<div class="empty">No hay tareas acá.</div>';
-    renderDaySummary();
-    return;
-  }
-
+function renderTaskDateGroupsHtml(tasksArr, todayStr){
+  const pending = tasksArr.filter(t=>!isTaskDoneForDate(t, todayStr));
+  const resolved = tasksArr.filter(t=>isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
   const groups = {};
   pending.forEach(t=>{
     const key = t.dueDate || '';
@@ -2811,6 +2826,43 @@ function renderPersonalTasks(){
   if(resolved.length){
     html += `<div class="ptask-date-group ptask-date-group-resolved">Resueltas hoy</div>`;
     html += resolved.map(personalTaskHtml).join('');
+  }
+  return html;
+}
+
+function renderPersonalTasks(){
+  const el = document.getElementById('task-list');
+  let filtered;
+  if(taskFilter === 'todas') filtered = personalTasks;
+  else if(taskFilter === 'sinresp') filtered = personalTasks.filter(t=>!t.assignedPerson);
+  else filtered = personalTasks.filter(t=>t.area===taskFilter);
+  const todayStr = todayKey();
+  if(!filtered.length){
+    el.innerHTML = '<div class="empty">No hay tareas acá.</div>';
+    renderDaySummary();
+    return;
+  }
+
+  let html = '';
+  if(taskFilter === 'nina'){
+    // En "By Nina" se ven las tareas de todos, separadas por responsable.
+    const byPerson = {};
+    filtered.forEach(t=>{
+      const label = personalTaskAssignedLabel(t);
+      if(!byPerson[label]) byPerson[label] = [];
+      byPerson[label].push(t);
+    });
+    const labels = Object.keys(byPerson).sort((a,b)=>{
+      if(a==='Sin responsable') return 1;
+      if(b==='Sin responsable') return -1;
+      return a.localeCompare(b);
+    });
+    labels.forEach(label=>{
+      html += `<div class="ptask-person-group">${escapeHtml(label)}</div>`;
+      html += renderTaskDateGroupsHtml(byPerson[label], todayStr);
+    });
+  } else {
+    html = renderTaskDateGroupsHtml(filtered, todayStr);
   }
   el.innerHTML = html;
   el.querySelectorAll('.ptask-check').forEach(btn=>{
@@ -2887,16 +2939,22 @@ function renderPersonalTasks(){
 async function addPersonalTask(){
   const textEl = document.getElementById('task-text-input');
   const areaEl = document.getElementById('task-area');
+  const personEl = document.getElementById('task-person');
   const dueEl = document.getElementById('task-due-date');
   const timeEl = document.getElementById('task-time-input');
   const repeatEl = document.getElementById('task-repeat-daily');
   const text = textEl.value.trim();
   if(!text) return;
+  if(!personEl.value){
+    alert('Elegí quién es el responsable de la tarea.');
+    return;
+  }
   const btn = document.getElementById('task-add-btn');
   btn.disabled = true;
   personalTasks.push({
     id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
     area: areaEl.value,
+    assignedPerson: personEl.value,
     text: text,
     dueDate: dueEl.value || '',
     time: timeEl.value || '',
@@ -3006,7 +3064,7 @@ function renderDaySummary(){
   const el = document.getElementById('day-summary');
   if(!el) return;
   const todayStr = dateKey(currentDate);
-  const dayTasks = (personalTasks||[]).filter(t => taskAppliesToDate(t, todayStr) && !isTaskDoneForDate(t, todayStr));
+  const dayTasks = (personalTasks||[]).filter(t => t.assignedPerson === 'ariel' && taskAppliesToDate(t, todayStr) && !isTaskDoneForDate(t, todayStr));
   if(!dayTasks.length){
     el.innerHTML = '<div class="empty">Sin pendientes para este día.</div>';
     return;
@@ -3164,6 +3222,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
 (async function initMiDia(){
   document.getElementById('task-due-date').value = dateKey(new Date());
+  populateTaskPersonSelect();
   renderDateHeader();
   renderTaskFilters();
   renderMidiaPersonFilter();
