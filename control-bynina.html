@@ -2718,7 +2718,7 @@ async function savePersonalTasks(){
 function renderTaskFilters(){
   const el = document.getElementById('task-filters');
   const keys = ['todas', 'sinresp', ...Object.keys(AREAS)];
-  const unassignedCount = personalTasks.filter(t=>!t.assignedPerson).length;
+  const unassignedCount = personalTasks.filter(t=>!personalTaskHasResponsible(t)).length;
   el.innerHTML = keys.map(k=>{
     const label = k==='todas' ? 'Todas' : k==='sinresp' ? `⚠️ Sin responsable${unassignedCount?` (${unassignedCount})`:''}` : AREAS[k];
     return `<div class="chip ${taskFilter===k?'active':''}" data-key="${k}">${label}</div>`;
@@ -2775,10 +2775,26 @@ function personalTaskResponsibleName(t){
   return null;
 }
 
+// Determina si la tarea YA tiene un responsable claro, ya sea porque se lo
+// asignaste directamente (assignedPerson) o porque viene vinculada a una
+// tarea de equipo que ya tiene responsable (linkedTeamTaskId). Esto es lo
+// mismo que se usa para mostrar el badge "Responsable: X".
+function personalTaskHasResponsible(t){
+  if(t.linkedTeamTaskId){
+    const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
+    if(tt && tt.person && tt.person!=='general') return true;
+  }
+  return !!t.assignedPerson;
+}
+
 // A diferencia de personalTaskResponsibleName (que no muestra nada para las
 // tareas de Ari, porque esa es la vista "por defecto"), esta función se usa
 // para agrupar por responsable en vistas donde se ven tareas de todos (ej. By Nina).
 function personalTaskAssignedLabel(t){
+  if(t.linkedTeamTaskId){
+    const tt = teamTasks.find(x=>x.id===t.linkedTeamTaskId);
+    if(tt && tt.person && tt.person!=='general') return PEOPLE[tt.person] || tt.person;
+  }
   if(t.assignedPerson) return PEOPLE[t.assignedPerson] || t.assignedPerson;
   return 'Sin responsable';
 }
@@ -2834,7 +2850,7 @@ function renderPersonalTasks(){
   const el = document.getElementById('task-list');
   let filtered;
   if(taskFilter === 'todas') filtered = personalTasks;
-  else if(taskFilter === 'sinresp') filtered = personalTasks.filter(t=>!t.assignedPerson);
+  else if(taskFilter === 'sinresp') filtered = personalTasks.filter(t=>!personalTaskHasResponsible(t));
   else filtered = personalTasks.filter(t=>t.area===taskFilter);
   const todayStr = todayKey();
   if(!filtered.length){
