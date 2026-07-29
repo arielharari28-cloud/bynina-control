@@ -948,7 +948,7 @@
   <div class="section-title st-purple" id="share-links-toggle" style="cursor:pointer;">🔗 Links para el equipo — tocá para ver</div>
   <div id="share-links-panel" style="display:none;"></div>
 
-  <div class="section-title st-purple" id="people-settings-toggle" style="cursor:pointer;">⚙️ Personas y Temas — tocá para editar</div>
+  <div class="section-title st-purple" id="people-settings-toggle" style="cursor:pointer;">⚙️ Personas, Temas y Áreas — tocá para editar</div>
   <div id="people-settings-panel" style="display:none;">
     <div class="settings-block">
       <div class="capture-label">Personas</div>
@@ -964,6 +964,14 @@
       <div class="capture-row">
         <input type="text" id="new-category-input" placeholder="Nombre del nuevo tema...">
         <button id="new-category-add-btn">Agregar</button>
+      </div>
+    </div>
+    <div class="settings-block">
+      <div class="capture-label">Áreas</div>
+      <div id="area-settings-list"></div>
+      <div class="capture-row">
+        <input type="text" id="new-area-input" placeholder="Nombre de la nueva área...">
+        <button id="new-area-add-btn">Agregar</button>
       </div>
     </div>
   </div>
@@ -990,14 +998,7 @@
   <div class="section-title st-rust">Mis tareas</div>
   <div class="capture">
     <div class="capture-row">
-      <select id="task-area">
-        <option value="nina">By Nina</option>
-        <option value="embrujo">Embrujo</option>
-        <option value="diverso">Diverso</option>
-        <option value="farb">Farb</option>
-        <option value="otros">Otros clientes</option>
-        <option value="personal">Personal</option>
-      </select>
+      <select id="task-area"></select>
       <select id="task-category"></select>
       <select id="task-person"></select>
       <input type="date" id="task-due-date">
@@ -1019,14 +1020,7 @@
     <div class="modal-title">Editar tarea</div>
     <div class="modal-field">
       <label for="edit-ptask-area">Área</label>
-      <select id="edit-ptask-area">
-        <option value="nina">By Nina</option>
-        <option value="embrujo">Embrujo</option>
-        <option value="diverso">Diverso</option>
-        <option value="farb">Farb</option>
-        <option value="otros">Otros clientes</option>
-        <option value="personal">Personal</option>
-      </select>
+      <select id="edit-ptask-area"></select>
     </div>
     <div class="modal-field">
       <label for="edit-ptask-category">Tema</label>
@@ -1654,6 +1648,7 @@ document.getElementById('people-settings-toggle').addEventListener('click', ()=>
   if(isHidden){
     renderPeopleSettingsList();
     renderCategorySettingsList();
+    renderAreaSettingsList();
   }
 });
 
@@ -1685,6 +1680,20 @@ document.getElementById('new-category-input').addEventListener('keydown', (e)=>{
   }
 });
 
+document.getElementById('new-area-add-btn').addEventListener('click', async ()=>{
+  const input = document.getElementById('new-area-input');
+  const name = input.value.trim();
+  if(!name) return;
+  await addCustomArea(name);
+  input.value = '';
+});
+document.getElementById('new-area-input').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){
+    e.preventDefault();
+    document.getElementById('new-area-add-btn').click();
+  }
+});
+
 function populateEditPtaskPersonSelect(){
   const sel = document.getElementById('edit-ptask-person');
   sel.innerHTML = `<option value="">Sin responsable (a revisar)</option>` +
@@ -1708,8 +1717,10 @@ function populateTaskPersonSelect(){
     document.getElementById('app-title').textContent = `By Nina — Hola, ${PEOPLE[employeePersona] || employeePersona}`;
   }
   await peopleAndCategoryConfigReady;
+  await loadAreaConfig();
   await migrateTeamTasksIfNeeded();
   document.getElementById('task-due-date').value = dateKey(new Date());
+  document.getElementById('task-area').innerHTML = areaSelectOptionsHtml('nina');
   document.getElementById('task-category').innerHTML = categorySelectOptionsHtml('otro');
   document.getElementById('task-repeat').innerHTML = repeatSelectOptionsHtml('none');
   renderDateHeader();
@@ -1729,10 +1740,89 @@ function populateTaskPersonSelect(){
 })();
 
 /* ===== Mi Día (personal, tab única) ===== */
-const AREAS = {
+const BASE_AREAS = {
   nina:'By Nina', embrujo:'Embrujo', diverso:'Diverso',
   farb:'Farb', otros:'Otros clientes', personal:'Personal'
 };
+let customAreas = {};
+let hiddenAreaKeys = [];
+let AREAS = {};
+function rebuildAreaLists(){
+  AREAS = {...BASE_AREAS, ...customAreas};
+}
+rebuildAreaLists();
+
+const AREA_CONFIG_KEY = 'control_bynina/area_config';
+async function loadAreaConfig(){
+  try{
+    const val = await fbGet(AREA_CONFIG_KEY);
+    if(val){
+      const parsed = JSON.parse(val);
+      customAreas = parsed.customAreas || {};
+      hiddenAreaKeys = parsed.hiddenAreaKeys || [];
+    }
+  }catch(e){}
+  rebuildAreaLists();
+}
+async function saveAreaConfig(){
+  try{
+    await fbSet(AREA_CONFIG_KEY, JSON.stringify({customAreas, hiddenAreaKeys}));
+  }catch(e){}
+}
+async function addCustomArea(name){
+  const label = name.trim();
+  if(!label) return;
+  const key = slugifyKey(label, Object.keys(AREAS));
+  customAreas[key] = label;
+  rebuildAreaLists();
+  await saveAreaConfig();
+  refreshAllAreaSelects();
+}
+async function removeArea(key){
+  if(customAreas[key]){
+    delete customAreas[key];
+  } else {
+    if(!hiddenAreaKeys.includes(key)) hiddenAreaKeys.push(key);
+  }
+  rebuildAreaLists();
+  await saveAreaConfig();
+  refreshAllAreaSelects();
+}
+function visibleAreaEntries(){
+  return Object.entries(AREAS).filter(([k])=>!hiddenAreaKeys.includes(k));
+}
+function areaSelectOptionsHtml(selected){
+  return visibleAreaEntries().map(([k,v])=>
+    `<option value="${k}" ${k===selected?'selected':''}>${v}</option>`
+  ).join('');
+}
+function refreshAllAreaSelects(){
+  const taskAreaSel = document.getElementById('task-area');
+  if(taskAreaSel){
+    const prev = taskAreaSel.value;
+    taskAreaSel.innerHTML = areaSelectOptionsHtml(prev);
+  }
+  renderTaskFilters();
+  renderAreaSettingsList();
+}
+
+function renderAreaSettingsList(){
+  const el = document.getElementById('area-settings-list');
+  if(!el) return;
+  const entries = visibleAreaEntries();
+  el.innerHTML = entries.length ? entries.map(([k,v])=>`
+    <div class="settings-item">
+      <span>${escapeHtml(v)}</span>
+      <button class="settings-item-del" data-key="${k}" title="Quitar de las listas">×</button>
+    </div>
+  `).join('') : '<div class="empty">No hay áreas cargadas.</div>';
+  el.querySelectorAll('.settings-item-del').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm(`¿Quitar el área "${AREAS[btn.dataset.key]}" de las listas para elegir? Las tareas viejas con esta área van a seguir mostrándola.`)) return;
+      await removeArea(btn.dataset.key);
+    });
+  });
+}
 
 let currentDate = new Date();
 let personalTasks = [];
@@ -1851,7 +1941,7 @@ async function savePersonalTasks(){
 
 function renderTaskFilters(){
   const el = document.getElementById('task-filters');
-  const keys = ['todas', 'sinresp', ...Object.keys(AREAS)];
+  const keys = ['todas', 'sinresp', ...visibleAreaEntries().map(([k])=>k)];
   const unassignedCount = personalTasks.filter(t=>!personalTaskHasResponsible(t)).length;
   el.innerHTML = keys.map(k=>{
     const label = k==='todas' ? 'Todas' : k==='sinresp' ? `⚠️ Sin responsable${unassignedCount?` (${unassignedCount})`:''}` : AREAS[k];
@@ -2128,7 +2218,9 @@ function openEditPersonalTask(id){
   const t = personalTasks.find(x=>x.id===id);
   if(!t) return;
   editingPersonalTaskId = id;
-  document.getElementById('edit-ptask-area').value = t.area;
+  const areaStillVisible = visibleAreaEntries().some(([k])=>k===t.area);
+  document.getElementById('edit-ptask-area').innerHTML = areaSelectOptionsHtml(t.area) +
+    (areaStillVisible ? '' : `<option value="${t.area}" selected>${AREAS[t.area]||t.area}</option>`);
   document.getElementById('edit-ptask-category').innerHTML = categorySelectOptionsHtml(t.category || 'otro');
   document.getElementById('edit-ptask-due').value = t.dueDate || '';
   document.getElementById('edit-ptask-time').value = t.time || '';
