@@ -1969,10 +1969,15 @@ async function migrateTeamTasksIfNeeded(){
 function taskDedupeSignature(t){
   return [(t.text||'').trim().toLowerCase(), t.area||'', t.dueDate||'', t.time||''].join('|');
 }
+// Antes esta limpieza corría una sola vez (marcándose con una bandera en Firebase).
+// El problema: si alguien abre la app en el celu y la compu casi al mismo tiempo, o
+// recarga muy rápido, la migración de arriba puede llegar a correr más de una vez antes
+// de que la bandera quede guardada, sumando tareas de equipo viejas otra vez. Por eso
+// esta limpieza ahora corre SIEMPRE al abrir la app: es liviana (no borra nada que no
+// sea un duplicado exacto: mismo texto, área, fecha y horario) así que hacerla de nuevo
+// sobre datos ya limpios simplemente no encuentra nada para juntar.
 async function dedupePersonalTasksIfNeeded(){
   try{
-    const done = await fbGet('control_bynina/dedupe_v1_done');
-    if(done) return;
     const val = await fbGet('control_bynina/personal_tasks');
     const tasks = val ? JSON.parse(val) : [];
     const groups = {};
@@ -2012,7 +2017,6 @@ async function dedupePersonalTasksIfNeeded(){
       await fbSet('control_bynina/personal_tasks', JSON.stringify(result));
       personalTasks = result;
     }
-    await fbSet('control_bynina/dedupe_v1_done', 'true');
   }catch(e){
     // si falla, no bloqueamos el arranque de la app
   }
