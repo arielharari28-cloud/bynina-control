@@ -919,6 +919,9 @@
   .draggable-row{cursor:grab;}
   .draggable-row:active{cursor:grabbing;}
   .draggable-row.dragging{opacity:.4;}
+  .ticket-draggable{cursor:grab;}
+  .ticket-draggable:active{cursor:grabbing;}
+  .ticket-draggable.dragging{opacity:.4;}
 </style>
 </head>
 <body>
@@ -1484,6 +1487,9 @@ function renderMidiaPersonTasks(){
   const filtered = personalTasks.filter(t=>t.assignedPerson===midiaFilterPerson);
   const todayStr = todayKey();
   const pending = filtered.filter(t=>taskRepeatType(t)!=='none' || !isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
+    if(a.order !== undefined && b.order !== undefined && a.order !== b.order) return a.order - b.order;
+    if(a.order !== undefined && b.order === undefined) return -1;
+    if(a.order === undefined && b.order !== undefined) return 1;
     const da = effectiveDueKey(a), db = effectiveDueKey(b);
     if(da && db){
       const cmp = da.localeCompare(db);
@@ -2059,7 +2065,7 @@ function personalTaskHtml(t){
   const catColor = colorForCategory(t.category || 'otro');
   const importantBtn = `<button class="edit-btn ptask-important ${t.important?'active':''}" data-id="${t.id}" title="${t.important?'Sacar importante':'Marcar importante'}">${t.important?'⭐':'☆'}</button>`;
   return `
-    <div class="ticket ${done?'resolved':''} ${responsableLabel?'shared-ticket':''} ${t.important?'important-ticket':''}" style="border-left:4px solid ${catColor};">
+    <div class="ticket ticket-draggable ${done?'resolved':''} ${responsableLabel?'shared-ticket':''} ${t.important?'important-ticket':''}" draggable="true" data-id="${t.id}" style="border-left:4px solid ${catColor};">
       <div class="ticket-check ptask-check" data-id="${t.id}">${done?'✓':''}</div>
       <div class="ticket-body">
         <div class="ticket-meta">
@@ -2113,6 +2119,9 @@ function personalTaskDateGroupLabel(dStr, todayStr){
 
 function sortPersonalTaskGroup(arr){
   return arr.slice().sort((a,b)=>{
+    if(a.order !== undefined && b.order !== undefined && a.order !== b.order) return a.order - b.order;
+    if(a.order !== undefined && b.order === undefined) return -1;
+    if(a.order === undefined && b.order !== undefined) return 1;
     if(!!a.important !== !!b.important) return a.important ? -1 : 1;
     const ra = personalTaskResponsibleName(a), rb = personalTaskResponsibleName(b);
     if(!ra && rb) return -1;
@@ -2216,6 +2225,61 @@ function wireTaskItemEvents(el){
       await savePersonalTasks();
     });
   });
+  el.querySelectorAll('.ticket-draggable').forEach(row=>{
+    row.addEventListener('dragstart', ()=>{
+      dragTicketId = row.dataset.id;
+      row.classList.add('dragging');
+    });
+    row.addEventListener('dragend', ()=>{
+      row.classList.remove('dragging');
+      dragTicketId = null;
+    });
+    row.addEventListener('dragover', (e)=>{
+      e.preventDefault();
+    });
+    row.addEventListener('drop', async (e)=>{
+      e.preventDefault();
+      const targetId = row.dataset.id;
+      if(!dragTicketId || dragTicketId === targetId) return;
+      const draggedRow = el.querySelector(`.ticket-draggable[data-id="${dragTicketId}"]`);
+      if(!draggedRow) return;
+      if(ticketGroupKey(draggedRow) !== ticketGroupKey(row)) return;
+      await reorderTicketGroup(el, dragTicketId, targetId);
+    });
+  });
+}
+
+// Identifica a qué "grupo" visual pertenece una tarjeta (misma persona + misma
+// fecha), para que arrastrar solo reordene dentro de ese grupo y no mezcle
+// tareas de fechas o personas distintas sin querer.
+function ticketGroupKey(rowEl){
+  let dateLabel = '', personLabel = '';
+  let sib = rowEl.previousElementSibling;
+  while(sib){
+    if(!dateLabel && sib.classList && sib.classList.contains('ptask-date-group')) dateLabel = sib.textContent;
+    if(sib.classList && sib.classList.contains('ptask-person-group')){ personLabel = sib.textContent; break; }
+    sib = sib.previousElementSibling;
+  }
+  return personLabel + '|' + dateLabel;
+}
+
+async function reorderTicketGroup(container, draggedId, targetId){
+  const draggedRow = container.querySelector(`.ticket-draggable[data-id="${draggedId}"]`);
+  if(!draggedRow) return;
+  const key = ticketGroupKey(draggedRow);
+  const rows = Array.from(container.querySelectorAll('.ticket-draggable')).filter(r=>ticketGroupKey(r)===key);
+  const ids = rows.map(r=>r.dataset.id);
+  const fromIdx = ids.indexOf(draggedId);
+  const toIdx = ids.indexOf(targetId);
+  if(fromIdx===-1 || toIdx===-1) return;
+  const [moved] = ids.splice(fromIdx,1);
+  ids.splice(toIdx,0,moved);
+  ids.forEach((id,i)=>{
+    const t = personalTasks.find(x=>x.id===id);
+    if(t) t.order = i;
+  });
+  renderAllTaskViews();
+  await savePersonalTasks();
 }
 
 // Vuelve a pintar todas las vistas que dependen de personalTasks (se llama después
@@ -2383,6 +2447,7 @@ document.getElementById('edit-ptask-modal').addEventListener('click', (e)=>{
   if(e.target.id === 'edit-ptask-modal') closeEditPersonalTask();
 });
 
+let dragTicketId = null;
 let dragSummaryId = null;
 
 function renderDaySummary(){
@@ -2430,6 +2495,12 @@ function renderDaySummary(){
     return `<select class="task-status-select summary-status-select" data-id="${t.id}" style="color:${TASK_STATUS_COLOR[statusVal]}">${taskStatusSelectHtml(t, todayStr)}</select>`;
   };
 
+  const repeatTagHtml = (t) => {
+    const type = taskRepeatType(t);
+    if(type === 'none') return '';
+    return `<span class="due-badge repeat-badge">🔁 ${REPEAT_LABELS[type].toLowerCase()}</span>`;
+  };
+
   let html = withTime.map(t => {
     const responsableName = personalTaskResponsibleName(t);
     const responsableLabel = responsableName ? `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(responsableName)}</span>` : '';
@@ -2439,6 +2510,7 @@ function renderDaySummary(){
       <span class="summary-time">${t.time}</span>
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
       ${responsableLabel}
+      ${repeatTagHtml(t)}
       ${overdueLabel(t)}
       ${statusSelectHtml(t)}
       <button class="edit-btn summary-edit" data-id="${t.id}" title="Editar">✎</button>
@@ -2456,6 +2528,7 @@ function renderDaySummary(){
         <div class="summary-check" data-id="${t.id}"></div>
         <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
         ${responsableLabel}
+        ${repeatTagHtml(t)}
         ${pendingLabel(t)}
         ${statusSelectHtml(t)}
         <button class="edit-btn summary-edit" data-id="${t.id}" title="Editar">✎</button>
