@@ -1127,12 +1127,13 @@ function slugifyKey(text, existingKeys){
 }
 async function addCustomPerson(name){
   const label = name.trim();
-  if(!label) return;
+  if(!label) return null;
   const key = slugifyKey(label, Object.keys(PEOPLE));
   customPeople[key] = label;
   rebuildPeopleLists();
   await savePeopleConfig();
   refreshAllPersonSelects();
+  return key;
 }
 async function removePerson(key){
   if(customPeople[key]){
@@ -1184,12 +1185,13 @@ async function saveCategoryConfig(){
 }
 async function addCustomCategory(name){
   const label = name.trim();
-  if(!label) return;
+  if(!label) return null;
   const key = slugifyKey(label, Object.keys(TASK_CATEGORIES));
   customCategories[key] = label;
   rebuildCategoryLists();
   await saveCategoryConfig();
   refreshAllCategorySelects();
+  return key;
 }
 async function removeCategory(key){
   if(customCategories[key]){
@@ -1208,7 +1210,7 @@ function visibleCategoryEntries(){
 function categorySelectOptionsHtml(selected){
   return visibleCategoryEntries().map(([k,v])=>
     `<option value="${k}" ${k===(selected||'otro')?'selected':''}>${v}</option>`
-  ).join('');
+  ).join('') + (isAdmin ? `<option value="__new_category__">+ Nuevo tema...</option>` : '');
 }
 
 /* ===== Panel de configuración: Personas y Temas (agregar/quitar manualmente) ===== */
@@ -1697,16 +1699,39 @@ document.getElementById('new-area-input').addEventListener('keydown', (e)=>{
 function populateEditPtaskPersonSelect(){
   const sel = document.getElementById('edit-ptask-person');
   sel.innerHTML = `<option value="">Sin responsable (a revisar)</option>` +
-    Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('');
+    Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('') +
+    (isAdmin ? `<option value="__new_person__">+ Nueva persona...</option>` : '');
 }
 
 function populateTaskPersonSelect(){
   const sel = document.getElementById('task-person');
   if(!sel) return;
-  sel.innerHTML = Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('');
+  sel.innerHTML = Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('') +
+    (isAdmin ? `<option value="__new_person__">+ Nueva persona...</option>` : '');
   sel.value = viewerPerson;
   sel.disabled = !isAdmin;
 }
+
+function wireInlineCreateSelect(selectId, sentinel, promptText, createFn, fallbackValue){
+  const sel = document.getElementById(selectId);
+  if(!sel) return;
+  sel.addEventListener('change', async ()=>{
+    if(sel.value !== sentinel) return;
+    const name = prompt(promptText);
+    if(!name || !name.trim()){
+      sel.value = fallbackValue;
+      return;
+    }
+    const key = await createFn(name.trim());
+    if(key) sel.value = key;
+  });
+}
+wireInlineCreateSelect('task-area', '__new_area__', 'Nombre de la nueva área:', addCustomArea, 'nina');
+wireInlineCreateSelect('edit-ptask-area', '__new_area__', 'Nombre de la nueva área:', addCustomArea, 'nina');
+wireInlineCreateSelect('task-category', '__new_category__', 'Nombre del nuevo tema:', addCustomCategory, 'otro');
+wireInlineCreateSelect('edit-ptask-category', '__new_category__', 'Nombre del nuevo tema:', addCustomCategory, 'otro');
+wireInlineCreateSelect('task-person', '__new_person__', 'Nombre de la nueva persona:', addCustomPerson, viewerPerson);
+wireInlineCreateSelect('edit-ptask-person', '__new_person__', 'Nombre de la nueva persona:', addCustomPerson, '');
 
 (async function init(){
   renderToday();
@@ -1771,12 +1796,13 @@ async function saveAreaConfig(){
 }
 async function addCustomArea(name){
   const label = name.trim();
-  if(!label) return;
+  if(!label) return null;
   const key = slugifyKey(label, Object.keys(AREAS));
   customAreas[key] = label;
   rebuildAreaLists();
   await saveAreaConfig();
   refreshAllAreaSelects();
+  return key;
 }
 async function removeArea(key){
   if(customAreas[key]){
@@ -1794,7 +1820,7 @@ function visibleAreaEntries(){
 function areaSelectOptionsHtml(selected){
   return visibleAreaEntries().map(([k,v])=>
     `<option value="${k}" ${k===selected?'selected':''}>${v}</option>`
-  ).join('');
+  ).join('') + (isAdmin ? `<option value="__new_area__">+ Nueva área...</option>` : '');
 }
 function refreshAllAreaSelects(){
   const taskAreaSel = document.getElementById('task-area');
