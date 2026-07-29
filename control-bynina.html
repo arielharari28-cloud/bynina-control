@@ -137,6 +137,19 @@
     margin-bottom:10px;
   }
   .capture-row{display:flex;gap:8px;flex-wrap:wrap;}
+
+  .settings-block{margin-bottom:16px;}
+  .settings-item{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;
+    background:#fff;
+  }
+  .settings-item .settings-item-del{
+    border:none;background:none;color:var(--ink-soft);cursor:pointer;font-size:16px;
+    line-height:1;padding:2px 6px;
+  }
+  .settings-item .settings-item-del:hover{color:#a03030;}
+  #new-person-input, #new-category-input{flex:1 1 160px;}
   select, textarea, input[type=text], input[type=date], input[type=time]{
     font-family:'Inter',sans-serif;
     border:1px solid var(--line);
@@ -963,6 +976,26 @@
   <div class="section-title st-purple" id="share-links-toggle" style="cursor:pointer;">🔗 Links para el equipo — tocá para ver</div>
   <div id="share-links-panel" style="display:none;"></div>
 
+  <div class="section-title st-purple" id="people-settings-toggle" style="cursor:pointer;">⚙️ Personas y Temas — tocá para editar</div>
+  <div id="people-settings-panel" style="display:none;">
+    <div class="settings-block">
+      <div class="capture-label">Personas</div>
+      <div id="people-settings-list"></div>
+      <div class="capture-row">
+        <input type="text" id="new-person-input" placeholder="Nombre de la nueva persona...">
+        <button id="new-person-add-btn">Agregar</button>
+      </div>
+    </div>
+    <div class="settings-block">
+      <div class="capture-label">Temas</div>
+      <div id="category-settings-list"></div>
+      <div class="capture-row">
+        <input type="text" id="new-category-input" placeholder="Nombre del nuevo tema...">
+        <button id="new-category-add-btn">Agregar</button>
+      </div>
+    </div>
+  </div>
+
   <div class="section-title st-red">Pendientes</div>
   <div id="pending-list"></div>
 
@@ -1234,29 +1267,197 @@ async function fbSet(path, value){
   return db.ref(path).set(value);
 }
 
-const PEOPLE = {
+const BASE_PEOPLE = {
   general:'General', ariel:'Ari', emir:'Emir', aripchico:'Ari Chico', ale:'Ale',
   noemi:'Noemi', flor:'Flor', carol:'Carol', noelia:'Noelia',
   stef:'Stef', meli:'Meli', nahuel:'Nahuel', peque:'Peque'
 };
-// Subconjunto para listas de selección (crear tarea, filtros, share links).
-// Se excluyen del listado por pedido de Ariel, pero quedan en PEOPLE para que
-// links/datos viejos de estas personas sigan mostrando su nombre sin romperse.
-const INACTIVE_PEOPLE_KEYS = ['ale','nahuel','carol','flor','noemi'];
-const ACTIVE_PEOPLE = Object.fromEntries(
-  Object.entries(PEOPLE).filter(([k]) => !INACTIVE_PEOPLE_KEYS.includes(k))
-);
+// Antes esta lista de "inactivos" era fija en el código. Ahora es el valor por
+// defecto la primera vez que se usa la app; a partir de ahí se guarda en Firebase
+// y se puede editar desde la app (agregar o quitar personas) sin tocar código.
+const DEFAULT_HIDDEN_PEOPLE_KEYS = ['ale','nahuel','carol','flor','noemi'];
+let customPeople = {};
+let hiddenPeopleKeys = DEFAULT_HIDDEN_PEOPLE_KEYS.slice();
+let PEOPLE = {};
+let ACTIVE_PEOPLE = {};
+function rebuildPeopleLists(){
+  PEOPLE = {...BASE_PEOPLE, ...customPeople};
+  ACTIVE_PEOPLE = Object.fromEntries(
+    Object.entries(PEOPLE).filter(([k]) => !hiddenPeopleKeys.includes(k))
+  );
+}
+rebuildPeopleLists();
 let activeFilter = 'todos';
 
-/* ===== Tema de la tarea (Web / Diseño / Redes / Marketing / Otro) ===== */
-const TASK_CATEGORIES = {web:'Web', diseno:'Diseño', redes:'Redes', marketing:'Marketing', otro:'Otro'};
-const TASK_CATEGORY_COLOR = {web:'#5b4e9e', diseno:'#8b4a2b', redes:'#2f6b4f', marketing:'#7a3230', otro:'#847d70'};
+const PEOPLE_CONFIG_KEY = 'control_bynina/people_config';
+async function loadPeopleConfig(){
+  try{
+    const val = await fbGet(PEOPLE_CONFIG_KEY);
+    if(val){
+      const parsed = JSON.parse(val);
+      customPeople = parsed.customPeople || {};
+      hiddenPeopleKeys = parsed.hiddenPeopleKeys || DEFAULT_HIDDEN_PEOPLE_KEYS.slice();
+    }
+  }catch(e){}
+  rebuildPeopleLists();
+}
+async function savePeopleConfig(){
+  try{
+    await fbSet(PEOPLE_CONFIG_KEY, JSON.stringify({customPeople, hiddenPeopleKeys}));
+  }catch(e){}
+}
+function slugifyKey(text, existingKeys){
+  let base = text.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]+/g,'') || 'item';
+  let key = base, n = 2;
+  while(existingKeys.includes(key)){ key = base + n; n++; }
+  return key;
+}
+async function addCustomPerson(name){
+  const label = name.trim();
+  if(!label) return;
+  const key = slugifyKey(label, Object.keys(PEOPLE));
+  customPeople[key] = label;
+  rebuildPeopleLists();
+  await savePeopleConfig();
+  refreshAllPersonSelects();
+}
+async function removePerson(key){
+  if(customPeople[key]){
+    delete customPeople[key];
+  } else {
+    if(!hiddenPeopleKeys.includes(key)) hiddenPeopleKeys.push(key);
+  }
+  rebuildPeopleLists();
+  await savePeopleConfig();
+  refreshAllPersonSelects();
+}
+
+/* ===== Tema de la tarea (Web / Diseño / Redes / Marketing / Otro, + personalizados) ===== */
+const BASE_CATEGORIES = {web:'Web', diseno:'Diseño', redes:'Redes', marketing:'Marketing', otro:'Otro'};
+const BASE_CATEGORY_COLOR = {web:'#5b4e9e', diseno:'#8b4a2b', redes:'#2f6b4f', marketing:'#7a3230', otro:'#847d70'};
+const CUSTOM_COLOR_PALETTE = ['#5b4e9e','#8b4a2b','#2f6b4f','#7a3230','#847d70','#1f6f78','#a1662f','#6b4f8f','#3f7a4a','#9c4a63'];
+function hashColorFromKey(key){
+  let hash = 0;
+  for(let i=0;i<key.length;i++){ hash = (hash*31 + key.charCodeAt(i)) >>> 0; }
+  return CUSTOM_COLOR_PALETTE[hash % CUSTOM_COLOR_PALETTE.length];
+}
+function colorForCategory(cat){
+  return BASE_CATEGORY_COLOR[cat] || hashColorFromKey(cat || 'otro');
+}
+let customCategories = {};
+let hiddenCategoryKeys = [];
+let TASK_CATEGORIES = {};
+function rebuildCategoryLists(){
+  TASK_CATEGORIES = {...BASE_CATEGORIES, ...customCategories};
+}
+rebuildCategoryLists();
+
+const CATEGORY_CONFIG_KEY = 'control_bynina/category_config';
+async function loadCategoryConfig(){
+  try{
+    const val = await fbGet(CATEGORY_CONFIG_KEY);
+    if(val){
+      const parsed = JSON.parse(val);
+      customCategories = parsed.customCategories || {};
+      hiddenCategoryKeys = parsed.hiddenCategoryKeys || [];
+    }
+  }catch(e){}
+  rebuildCategoryLists();
+}
+async function saveCategoryConfig(){
+  try{
+    await fbSet(CATEGORY_CONFIG_KEY, JSON.stringify({customCategories, hiddenCategoryKeys}));
+  }catch(e){}
+}
+async function addCustomCategory(name){
+  const label = name.trim();
+  if(!label) return;
+  const key = slugifyKey(label, Object.keys(TASK_CATEGORIES));
+  customCategories[key] = label;
+  rebuildCategoryLists();
+  await saveCategoryConfig();
+  refreshAllCategorySelects();
+}
+async function removeCategory(key){
+  if(customCategories[key]){
+    delete customCategories[key];
+  } else {
+    if(!hiddenCategoryKeys.includes(key)) hiddenCategoryKeys.push(key);
+  }
+  rebuildCategoryLists();
+  await saveCategoryConfig();
+  refreshAllCategorySelects();
+}
+function visibleCategoryEntries(){
+  return Object.entries(TASK_CATEGORIES).filter(([k])=>!hiddenCategoryKeys.includes(k));
+}
 
 function categorySelectOptionsHtml(selected){
-  return Object.entries(TASK_CATEGORIES).map(([k,v])=>
+  return visibleCategoryEntries().map(([k,v])=>
     `<option value="${k}" ${k===(selected||'otro')?'selected':''}>${v}</option>`
   ).join('');
 }
+
+/* ===== Panel de configuración: Personas y Temas (agregar/quitar manualmente) ===== */
+function refreshAllPersonSelects(){
+  renderFilters();
+  renderMidiaPersonFilter();
+  renderTeamPersonChips();
+  populateEditPersonSelect();
+  populateEditPtaskPersonSelect();
+  populateTaskPersonSelect();
+  renderCalPersonFilter();
+  renderPeopleSettingsList();
+}
+function refreshAllCategorySelects(){
+  renderTeamCategoryChips();
+  renderEmployeeCategoryChips();
+  renderCalCategoryFilter();
+  renderCategorySettingsList();
+}
+
+function renderPeopleSettingsList(){
+  const el = document.getElementById('people-settings-list');
+  if(!el) return;
+  const keys = Object.keys(ACTIVE_PEOPLE).filter(k=>k!=='general');
+  el.innerHTML = keys.length ? keys.map(k=>`
+    <div class="settings-item">
+      <span>${escapeHtml(PEOPLE[k])}</span>
+      <button class="settings-item-del" data-key="${k}" title="Quitar de las listas">×</button>
+    </div>
+  `).join('') : '<div class="empty">No hay personas cargadas.</div>';
+  el.querySelectorAll('.settings-item-del').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm(`¿Quitar a "${PEOPLE[btn.dataset.key]}" de las listas para elegir? Las tareas viejas asignadas a esta persona van a seguir mostrando su nombre.`)) return;
+      await removePerson(btn.dataset.key);
+    });
+  });
+}
+
+function renderCategorySettingsList(){
+  const el = document.getElementById('category-settings-list');
+  if(!el) return;
+  const entries = visibleCategoryEntries();
+  el.innerHTML = entries.length ? entries.map(([k,v])=>`
+    <div class="settings-item">
+      <span>${escapeHtml(v)}</span>
+      <button class="settings-item-del" data-key="${k}" title="Quitar de las listas">×</button>
+    </div>
+  `).join('') : '<div class="empty">No hay temas cargados.</div>';
+  el.querySelectorAll('.settings-item-del').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm(`¿Quitar el tema "${TASK_CATEGORIES[btn.dataset.key]}" de las listas para elegir? Las tareas viejas con este tema van a seguir mostrándolo.`)) return;
+      await removeCategory(btn.dataset.key);
+    });
+  });
+}
+
+const peopleAndCategoryConfigReady = (async ()=>{
+  await loadPeopleConfig();
+  await loadCategoryConfig();
+})();
 
 /* ===== Repetición flexible (ninguna / diaria / semanal / cada 15 días / mensual) ===== */
 const REPEAT_LABELS = {
@@ -2068,7 +2269,7 @@ function isOverdue(dueStr, resolved){
 function categoryTagHtml(t){
   const cat = t.category || 'otro';
   const label = TASK_CATEGORIES[cat] || TASK_CATEGORIES.otro;
-  const color = TASK_CATEGORY_COLOR[cat] || TASK_CATEGORY_COLOR.otro;
+  const color = colorForCategory(cat);
   return `<span class="due-badge cat-badge" style="background:${color}22;color:${color};">${escapeHtml(label)}</span>`;
 }
 
@@ -2281,6 +2482,44 @@ document.getElementById('share-links-toggle').addEventListener('click', ()=>{
   if(isHidden) renderShareLinks();
 });
 
+document.getElementById('people-settings-toggle').addEventListener('click', ()=>{
+  const panel = document.getElementById('people-settings-panel');
+  const isHidden = panel.style.display === 'none';
+  panel.style.display = isHidden ? '' : 'none';
+  if(isHidden){
+    renderPeopleSettingsList();
+    renderCategorySettingsList();
+  }
+});
+
+document.getElementById('new-person-add-btn').addEventListener('click', async ()=>{
+  const input = document.getElementById('new-person-input');
+  const name = input.value.trim();
+  if(!name) return;
+  await addCustomPerson(name);
+  input.value = '';
+});
+document.getElementById('new-person-input').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){
+    e.preventDefault();
+    document.getElementById('new-person-add-btn').click();
+  }
+});
+
+document.getElementById('new-category-add-btn').addEventListener('click', async ()=>{
+  const input = document.getElementById('new-category-input');
+  const name = input.value.trim();
+  if(!name) return;
+  await addCustomCategory(name);
+  input.value = '';
+});
+document.getElementById('new-category-input').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){
+    e.preventDefault();
+    document.getElementById('new-category-add-btn').click();
+  }
+});
+
 function renderTeamPersonChips(){
   const el = document.getElementById('team-person-chips');
   if(!el) return;
@@ -2296,7 +2535,7 @@ let teamNewTaskCategory = 'otro';
 function renderTeamCategoryChips(){
   const el = document.getElementById('team-category-chips');
   if(!el) return;
-  el.innerHTML = Object.entries(TASK_CATEGORIES).map(([k,v])=>
+  el.innerHTML = visibleCategoryEntries().map(([k,v])=>
     `<div class="chip team-category-chip ${k===teamNewTaskCategory?'active':''}" data-category="${k}">${v}</div>`
   ).join('');
   el.querySelectorAll('.team-category-chip').forEach(chip=>{
@@ -2370,7 +2609,7 @@ let employeeNewTaskCategory = 'otro';
 function renderEmployeeCategoryChips(){
   const el = document.getElementById('employee-category-chips');
   if(!el) return;
-  el.innerHTML = Object.entries(TASK_CATEGORIES).map(([k,v])=>
+  el.innerHTML = visibleCategoryEntries().map(([k,v])=>
     `<div class="chip employee-category-chip ${k===employeeNewTaskCategory?'active':''}" data-category="${k}">${v}</div>`
   ).join('');
   el.querySelectorAll('.employee-category-chip').forEach(chip=>{
@@ -2586,12 +2825,13 @@ document.getElementById('edit-task-modal').addEventListener('click', (e)=>{
 
 (async function init(){
   renderToday();
-  renderFilters();
-  renderTeamPersonChips();
-  renderTeamCategoryChips();
   document.getElementById('team-repeat').innerHTML = repeatSelectOptionsHtml('none');
   document.getElementById('team-due-date').value = todayKey();
   setStatus('cargando...');
+  await peopleAndCategoryConfigReady;
+  renderFilters();
+  renderTeamPersonChips();
+  renderTeamCategoryChips();
   await loadPlan();
   await loadEditMode();
   await loadChecklistEditMode();
@@ -3238,8 +3478,9 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 
 (async function initMiDia(){
   document.getElementById('task-due-date').value = dateKey(new Date());
-  populateTaskPersonSelect();
   renderDateHeader();
+  await peopleAndCategoryConfigReady;
+  populateTaskPersonSelect();
   renderTaskFilters();
   renderMidiaPersonFilter();
   renderMidiaPersonTasks();
@@ -3279,7 +3520,7 @@ function renderCalPersonFilter(){
 function renderCalCategoryFilter(){
   const el = document.getElementById('cal-category-filter');
   if(!el) return;
-  const options = [['todos','Todos'], ...Object.entries(TASK_CATEGORIES)];
+  const options = [['todos','Todos'], ...visibleCategoryEntries()];
   el.innerHTML = options.map(([k,v])=>
     `<div class="chip cal-cat-filter-chip ${k===calAdminFilterCategory?'active':''}" data-category="${k}">${v}</div>`
   ).join('');
@@ -3375,7 +3616,7 @@ function renderCalendarMonth(scope){
       const showWho = scope==='admin' && (calAdminFilterPerson === 'todos' || isShared) && PEOPLE[t.person];
       const who = isShared ? `Responsable ${PEOPLE[t.person]||t.person}: ` : (showWho ? PEOPLE[t.person]+': ' : '');
       const icon = isShared ? '👁️' : (taskRepeatType(t)!=='none' ? '🔁' : '📌');
-      const catColor = TASK_CATEGORY_COLOR[t.category] || TASK_CATEGORY_COLOR.otro;
+      const catColor = colorForCategory(t.category);
       return `<div class="cal-item-chip cal-task-chip ${done?'done':''} ${isShared?'cal-task-shared':''}"><span class="cal-item-dot" style="background:${catColor}"></span>${icon} ${escapeHtml(who)}${escapeHtml(t.text)}</div>`;
     });
     const contentChips = contentItems.map(it=>
@@ -3450,7 +3691,7 @@ function renderCalDayTeamTasks(){
     const isShared = !!t.sharedWithMe;
     const icon = isShared ? '👁️' : (taskRepeatType(t)!=='none' ? '🔁' : '📌');
     const label = isShared ? `Responsable: ${escapeHtml(who)}` : escapeHtml(who);
-    const catColor = TASK_CATEGORY_COLOR[t.category] || TASK_CATEGORY_COLOR.otro;
+    const catColor = colorForCategory(t.category);
     const catLabel = TASK_CATEGORIES[t.category] || TASK_CATEGORIES.otro;
     return `<div class="cal-day-item-row cal-day-team-row ${isShared?'cal-task-shared':''}" data-id="${t.id}">
       <span class="cal-item-dot" style="background:${catColor}"></span>
@@ -3588,6 +3829,7 @@ document.querySelectorAll('.emp-tab-btn').forEach(btn=>{
 
 (async function initContentCalendar(){
   await loadContentCalendar();
+  await peopleAndCategoryConfigReady;
   renderCalPersonFilter();
   renderCalendarMonth('admin');
   renderCalendarMonth('emp');
