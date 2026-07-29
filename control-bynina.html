@@ -150,6 +150,10 @@
   }
   .settings-item .settings-item-del:hover{color:#a03030;}
   #new-person-input, #new-category-input{flex:1 1 160px;}
+
+  .ptask-important{color:#c9a227;}
+  .ptask-important.active{color:#e0a800;}
+  .important-ticket{background:#fffbea;}
   select, textarea, input[type=text], input[type=date], input[type=time]{
     font-family:'Inter',sans-serif;
     border:1px solid var(--line);
@@ -1599,7 +1603,7 @@ function categoryTagHtml(t){
   const cat = t.category || 'otro';
   const label = TASK_CATEGORIES[cat] || TASK_CATEGORIES.otro;
   const color = colorForCategory(cat);
-  return `<span class="due-badge cat-badge" style="background:${color}22;color:${color};">${escapeHtml(label)}</span>`;
+  return `<span class="due-badge cat-badge" style="background:${color};color:#fff;">${escapeHtml(label)}</span>`;
 }
 
 function repeatBadgeHtml(t){
@@ -2052,8 +2056,10 @@ function personalTaskHtml(t){
   const responsableLabel = responsableName ? `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(responsableName)}</span>` : '';
   const statusVal = getTaskStatusForDate(t, todayKey());
   const statusSelectHtml = `<select class="task-status-select ptask-status-select" data-id="${t.id}" style="color:${TASK_STATUS_COLOR[statusVal]}">${taskStatusSelectHtml(t, todayKey())}</select>`;
+  const catColor = colorForCategory(t.category || 'otro');
+  const importantBtn = `<button class="edit-btn ptask-important ${t.important?'active':''}" data-id="${t.id}" title="${t.important?'Sacar importante':'Marcar importante'}">${t.important?'⭐':'☆'}</button>`;
   return `
-    <div class="ticket ${done?'resolved':''} ${responsableLabel?'shared-ticket':''}">
+    <div class="ticket ${done?'resolved':''} ${responsableLabel?'shared-ticket':''} ${t.important?'important-ticket':''}" style="border-left:4px solid ${catColor};">
       <div class="ticket-check ptask-check" data-id="${t.id}">${done?'✓':''}</div>
       <div class="ticket-body">
         <div class="ticket-meta">
@@ -2067,6 +2073,7 @@ function personalTaskHtml(t){
         <div class="ticket-text">${escapeHtml(t.text)}</div>
         ${t.photoUrl ? `<img class="ptask-photo" src="${t.photoUrl}" data-full="${t.photoUrl}">` : ''}
       </div>
+      ${importantBtn}
       <button class="edit-btn ptask-photo-btn" data-id="${t.id}" title="Agregar/cambiar foto">📷</button>
       ${postponeBtn}
       <button class="edit-btn ptask-edit" data-id="${t.id}" title="Editar">✎</button>
@@ -2106,6 +2113,7 @@ function personalTaskDateGroupLabel(dStr, todayStr){
 
 function sortPersonalTaskGroup(arr){
   return arr.slice().sort((a,b)=>{
+    if(!!a.important !== !!b.important) return a.important ? -1 : 1;
     const ra = personalTaskResponsibleName(a), rb = personalTaskResponsibleName(b);
     if(!ra && rb) return -1;
     if(ra && !rb) return 1;
@@ -2116,7 +2124,6 @@ function sortPersonalTaskGroup(arr){
 
 function renderTaskDateGroupsHtml(tasksArr, todayStr){
   const pending = tasksArr.filter(t=>!isTaskDoneForDate(t, todayStr));
-  const resolved = tasksArr.filter(t=>isTaskDoneForDate(t, todayStr)).sort((a,b)=>b.ts-a.ts);
   const groups = {};
   pending.forEach(t=>{
     const key = t.dueDate || '';
@@ -2135,9 +2142,8 @@ function renderTaskDateGroupsHtml(tasksArr, todayStr){
     html += `<div class="ptask-date-group">Sin fecha fija</div>`;
     html += sortPersonalTaskGroup(noDateTasks).map(personalTaskHtml).join('');
   }
-  if(resolved.length){
-    html += `<div class="ptask-date-group ptask-date-group-resolved">Resueltas hoy</div>`;
-    html += resolved.map(personalTaskHtml).join('');
+  if(!dateKeys.length && !noDateTasks.length){
+    html += '<div class="empty">No hay pendientes acá. 🎉</div>';
   }
   return html;
 }
@@ -2145,6 +2151,15 @@ function renderTaskDateGroupsHtml(tasksArr, todayStr){
 function wireTaskItemEvents(el){
   el.querySelectorAll('.ptask-check').forEach(btn=>{
     btn.addEventListener('click', ()=>togglePersonalTaskResolved(btn.dataset.id));
+  });
+  el.querySelectorAll('.ptask-important').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const t = personalTasks.find(x=>x.id===btn.dataset.id);
+      if(!t) return;
+      t.important = !t.important;
+      renderAllTaskViews();
+      await savePersonalTasks();
+    });
   });
   el.querySelectorAll('.ptask-postpone').forEach(btn=>{
     btn.addEventListener('click', ()=>postponePersonalTask(btn.dataset.id));
