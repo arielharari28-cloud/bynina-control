@@ -1744,6 +1744,7 @@ wireInlineCreateSelect('edit-ptask-person', '__new_person__', 'Nombre de la nuev
   await peopleAndCategoryConfigReady;
   await loadAreaConfig();
   await migrateTeamTasksIfNeeded();
+  await dedupePersonalTasksIfNeeded();
   document.getElementById('task-due-date').value = dateKey(new Date());
   document.getElementById('task-area').innerHTML = areaSelectOptionsHtml('nina');
   document.getElementById('task-category').innerHTML = categorySelectOptionsHtml('otro');
@@ -1945,6 +1946,63 @@ async function migrateTeamTasksIfNeeded(){
       await fbSet('control_bynina/personal_tasks', JSON.stringify(existing));
     }
     await fbSet('control_bynina/team_migration_done', 'true');
+  }catch(e){
+    // si falla, no bloqueamos el arranque de la app
+  }
+}
+
+// Antes, una tarea de equipo con "Estoy involucrado" creaba una copia espejo en Mi Día.
+// Sumado a la migración de arriba (que trajo TODAS las tareas de equipo, incluidas las
+// que ya tenían esa copia espejo), esto dejó tareas duplicadas: mismo texto, área, fecha
+// y horario. Esta limpieza corre UNA sola vez, junta esos duplicados en una sola tarea
+// (priorizando la copia que ya tenga responsable asignado) y no vuelve a correr después.
+function taskDedupeSignature(t){
+  return [(t.text||'').trim().toLowerCase(), t.area||'', t.dueDate||'', t.time||''].join('|');
+}
+async function dedupePersonalTasksIfNeeded(){
+  try{
+    const done = await fbGet('control_bynina/dedupe_v1_done');
+    if(done) return;
+    const val = await fbGet('control_bynina/personal_tasks');
+    const tasks = val ? JSON.parse(val) : [];
+    const groups = {};
+    tasks.forEach(t=>{
+      const sig = taskDedupeSignature(t);
+      if(!groups[sig]) groups[sig] = [];
+      groups[sig].push(t);
+    });
+    const result = [];
+    Object.values(groups).forEach(group=>{
+      if(group.length === 1){
+        result.push(group[0]);
+        return;
+      }
+      const survivor = group.find(t=>t.assignedPerson) ||
+        group.find(t=>t.category && t.category!=='otro') ||
+        group.slice().sort((a,b)=>(b.ts||0)-(a.ts||0))[0];
+      const mergedStatusDates = {}, mergedDoneDates = {};
+      group.forEach(t=>{
+        Object.assign(mergedStatusDates, t.statusDates||{});
+        Object.assign(mergedDoneDates, t.doneDates||{});
+      });
+      if(Object.keys(mergedStatusDates).length) survivor.statusDates = mergedStatusDates;
+      if(Object.keys(mergedDoneDates).length) survivor.doneDates = mergedDoneDates;
+      if(!survivor.assignedPerson){
+        const withPerson = group.find(t=>t.assignedPerson);
+        if(withPerson) survivor.assignedPerson = withPerson.assignedPerson;
+      }
+      if(!survivor.resolved && group.some(t=>t.resolved)) survivor.resolved = true;
+      if(!survivor.photoUrl){
+        const withPhoto = group.find(t=>t.photoUrl);
+        if(withPhoto) survivor.photoUrl = withPhoto.photoUrl;
+      }
+      result.push(survivor);
+    });
+    if(result.length !== tasks.length){
+      await fbSet('control_bynina/personal_tasks', JSON.stringify(result));
+      personalTasks = result;
+    }
+    await fbSet('control_bynina/dedupe_v1_done', 'true');
   }catch(e){
     // si falla, no bloqueamos el arranque de la app
   }
