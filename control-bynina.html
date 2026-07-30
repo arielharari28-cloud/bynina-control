@@ -998,7 +998,7 @@
   </div>
 
   <div class="section-title st-green" id="summary-section-title">Resumen de tu día</div>
-  <div class="day-summary-card" id="day-summary"></div>
+  <div class="day-summary-card" id="day-summary"><div class="empty">Cargando...</div></div>
 
   <div id="admin-only-midia-person">
   <div class="section-title st-purple">Pendientes por persona</div>
@@ -1020,7 +1020,7 @@
     </div>
   </div>
   <div class="filters" id="task-filters"></div>
-  <div id="task-list"></div>
+  <div id="task-list"><div class="empty">Cargando...</div></div>
 
   <div class="status-bar" id="status-bar">cargando...</div>
 </div>
@@ -1408,7 +1408,7 @@ async function dismissPendingAnterior(id){
     if(dStr < todayStr) delete t.statusDates[dStr];
   });
   renderAllTaskViews();
-  await savePersonalTasks();
+  await saveOneTask(t);
 }
 
 // Una tarea que se repite no tiene un único "resolved": se marca hecha por día (doneDates).
@@ -1769,6 +1769,7 @@ wireInlineCreateSelect('edit-ptask-person', '__new_person__', 'Nombre de la nuev
   await loadAreaConfig();
   await migrateTeamTasksIfNeeded();
   await dedupePersonalTasksIfNeeded();
+  await migrateToTasksV2IfNeeded();
   document.getElementById('task-due-date').value = dateKey(new Date());
   document.getElementById('task-area').innerHTML = areaSelectOptionsHtml('nina');
   document.getElementById('task-category').innerHTML = categorySelectOptionsHtml('otro');
@@ -1779,13 +1780,10 @@ wireInlineCreateSelect('edit-ptask-person', '__new_person__', 'Nombre de la nuev
     await loadPlan();
     await loadEditMode();
   }
-  await loadPersonalTasks();
-  renderTaskFilters();
-  renderPersonalTasks();
-  if(isAdmin){
-    renderMidiaPersonFilter();
-    renderMidiaPersonTasks();
-  }
+  // A partir de acá, personalTasks se mantiene sincronizado en vivo con Firebase:
+  // este listener se dispara ahora con la primera carga, y de nuevo cada vez que
+  // cambia algo (lo hagas vos u otra persona en otra pantalla).
+  attachPersonalTasksListener();
   setStatus('listo — se guarda solo en este dispositivo');
 })();
 
@@ -1947,8 +1945,9 @@ async function migrateTeamTasksIfNeeded(){
     const teamVal = await fbGet('control_bynina/team_tasks');
     const oldTeamTasks = teamVal ? JSON.parse(teamVal) : [];
     if(oldTeamTasks.length){
-      const personalVal = await fbGet('control_bynina/personal_tasks');
-      const existing = personalVal ? JSON.parse(personalVal) : [];
+      const personalRes = await fbGetSafe('control_bynina/personal_tasks');
+      if(!personalRes.ok) return; // no arriesgamos a pisar todo si no pudimos leer bien
+      const existing = personalRes.value ? JSON.parse(personalRes.value) : [];
       oldTeamTasks.forEach(t=>{
         existing.push({
           id: 'tk-mig-' + Date.now() + Math.random().toString(36).slice(2,7),
@@ -1992,7 +1991,9 @@ function taskDedupeSignature(t){
 // sobre datos ya limpios simplemente no encuentra nada para juntar.
 async function dedupePersonalTasksIfNeeded(){
   try{
-    const val = await fbGet('control_bynina/personal_tasks');
+    const res = await fbGetSafe('control_bynina/personal_tasks');
+    if(!res.ok) return; // no arriesgamos a pisar todo si no pudimos leer bien
+    const val = res.value;
     const tasks = val ? JSON.parse(val) : [];
     const groups = {};
     tasks.forEach(t=>{
@@ -2036,18 +2037,84 @@ async function dedupePersonalTasksIfNeeded(){
   }
 }
 
-async function loadPersonalTasks(){
+async function fbGetSafe(path){
   try{
-    const val = await fbGet('control_bynina/personal_tasks');
-    personalTasks = val ? JSON.parse(val) : [];
+    const snap = await db.ref(path).once('value');
+    return {ok:true, value: snap.exists() ? snap.val() : null};
   }catch(e){
-    personalTasks = [];
+    return {ok:false, value:null};
   }
 }
 
-async function savePersonalTasks(){
+// Migración a un modelo de guardado por tarea (en vez de una lista entera que se
+// reescribe completa cada vez). Antes, si alguien tenía la app abierta en dos lugares
+// (celu + compu, o el link de cada empleado abierto todo el día), el que guardaba último
+// pisaba TODA la lista con lo que tenía en memoria, "revirtiendo" cambios de los demás.
+// Ahora cada tarea vive en su propio nodo de Firebase, así dos personas editando cosas
+// distintas al mismo tiempo no se pisan entre sí.
+async function migrateToTasksV2IfNeeded(){
   try{
-    await fbSet('control_bynina/personal_tasks', JSON.stringify(personalTasks));
+    const doneSnap = await db.ref('control_bynina/tasks_v2_migration_done').once('value');
+    if(doneSnap.exists()) return;
+    const oldSnap = await db.ref('control_bynina/personal_tasks').once('value');
+    if(oldSnap.exists()){
+      let oldTasks = [];
+      try{ oldTasks = JSON.parse(oldSnap.val()); }catch(e){ oldTasks = []; }
+      const updates = {};
+      (oldTasks||[]).forEach(t=>{
+        if(!t.id) t.id = 'tk' + Date.now() + Math.random().toString(36).slice(2,7);
+        updates[t.id] = t;
+      });
+      if(Object.keys(updates).length){
+        await db.ref('control_bynina/tasks_v2').update(updates);
+      }
+    }
+    await db.ref('control_bynina/tasks_v2_migration_done').set(true);
+  }catch(e){
+    // si falla, no seteamos el flag — se reintenta en el próximo load sin duplicar
+    // (los ids se mantienen estables, así que reintentar no crea copias de más)
+  }
+}
+
+let personalTasksFirstSyncDone = false;
+let personalTasksListenerAttached = false;
+function attachPersonalTasksListener(){
+  if(personalTasksListenerAttached) return;
+  personalTasksListenerAttached = true;
+  db.ref('control_bynina/tasks_v2').on('value', snap=>{
+    const val = snap.val() || {};
+    personalTasks = Object.keys(val).map(id=>({...val[id], id}));
+    personalTasksFirstSyncDone = true;
+    renderTaskFilters();
+    renderPersonalTasks();
+    if(isAdmin){
+      renderMidiaPersonFilter();
+      renderMidiaPersonTasks();
+    }
+  }, err=>{
+    // Si se corta la conexión, Firebase reintenta solo; no hace falta un botón de reintentar.
+    setStatus('⚠️ sin conexión — se va a actualizar solo cuando vuelva');
+  });
+}
+
+// Guarda solo LA tarea que cambió (no toda la lista), para que dos dispositivos/pestañas
+// abiertos a la vez no se pisen el uno al otro.
+async function saveOneTask(t){
+  try{
+    await db.ref('control_bynina/tasks_v2/' + t.id).set(t);
+  }catch(e){}
+}
+// Para cuando cambian varias tareas juntas (ej: reordenar arrastrando un grupo entero).
+async function saveTasksMulti(tasksArr){
+  const updates = {};
+  tasksArr.forEach(t=>{ updates[t.id] = t; });
+  try{
+    await db.ref('control_bynina/tasks_v2').update(updates);
+  }catch(e){}
+}
+async function deleteOneTaskRemote(id){
+  try{
+    await db.ref('control_bynina/tasks_v2/' + id).remove();
   }catch(e){}
 }
 
@@ -2185,7 +2252,7 @@ function wireTaskItemEvents(el){
       if(!t) return;
       t.important = !t.important;
       renderAllTaskViews();
-      await savePersonalTasks();
+      await saveOneTask(t);
     });
   });
   el.querySelectorAll('.ptask-postpone').forEach(btn=>{
@@ -2213,7 +2280,7 @@ function wireTaskItemEvents(el){
         const url = await uploadToCloudinary(file);
         t.photoUrl = url;
         renderAllTaskViews();
-        await savePersonalTasks();
+        await saveOneTask(t);
         setStatus('foto guardada');
       }catch(e){
         setStatus('no se pudo subir la foto, probá de nuevo');
@@ -2227,9 +2294,10 @@ function wireTaskItemEvents(el){
   });
   el.querySelectorAll('.ptask-del').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
-      personalTasks = personalTasks.filter(x=>x.id!==btn.dataset.id);
+      const id = btn.dataset.id;
+      personalTasks = personalTasks.filter(x=>x.id!==id);
       renderAllTaskViews();
-      await savePersonalTasks();
+      await deleteOneTaskRemote(id);
     });
   });
   el.querySelectorAll('.ptask-status-select').forEach(sel=>{
@@ -2240,7 +2308,7 @@ function wireTaskItemEvents(el){
       if(!t) return;
       setTaskStatusForDate(t, todayKey(), sel.value);
       renderAllTaskViews();
-      await savePersonalTasks();
+      await saveOneTask(t);
     });
   });
   el.querySelectorAll('.ticket-draggable').forEach(row=>{
@@ -2292,12 +2360,13 @@ async function reorderTicketGroup(container, draggedId, targetId){
   if(fromIdx===-1 || toIdx===-1) return;
   const [moved] = ids.splice(fromIdx,1);
   ids.splice(toIdx,0,moved);
+  const touched = [];
   ids.forEach((id,i)=>{
     const t = personalTasks.find(x=>x.id===id);
-    if(t) t.order = i;
+    if(t){ t.order = i; touched.push(t); }
   });
   renderAllTaskViews();
-  await savePersonalTasks();
+  await saveTasksMulti(touched);
 }
 
 // Vuelve a pintar todas las vistas que dependen de personalTasks (se llama después
@@ -2364,7 +2433,7 @@ async function addPersonalTask(){
   }
   const btn = document.getElementById('task-add-btn');
   btn.disabled = true;
-  personalTasks.push({
+  const newTask = {
     id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
     area: areaEl.value,
     category: categoryEl.value || 'otro',
@@ -2375,12 +2444,13 @@ async function addPersonalTask(){
     ts: Date.now(),
     resolved: false,
     repeat: repeatEl.value || 'none'
-  });
+  };
+  personalTasks.push(newTask);
   textEl.value = '';
   timeEl.value = '';
   repeatEl.value = 'none';
   renderAllTaskViews();
-  await savePersonalTasks();
+  await saveOneTask(newTask);
   btn.disabled = false;
   textEl.focus();
 }
@@ -2427,7 +2497,7 @@ async function togglePersonalTaskResolved(id){
   const today = todayKey();
   toggleTaskDoneForDate(t, today);
   renderAllTaskViews();
-  await savePersonalTasks();
+  await saveOneTask(t);
 }
 
 async function postponePersonalTask(id){
@@ -2435,7 +2505,7 @@ async function postponePersonalTask(id){
   if(!t || taskRepeatType(t) !== 'none') return;
   t.dueDate = nextDayKey(t.dueDate || dateKey(currentDate));
   renderAllTaskViews();
-  await savePersonalTasks();
+  await saveOneTask(t);
   setStatus('pospuesta a mañana');
 }
 
@@ -2456,7 +2526,7 @@ async function saveEditPersonalTask(){
   }
   closeEditPersonalTask();
   renderAllTaskViews();
-  await savePersonalTasks();
+  await saveOneTask(t);
 }
 
 document.getElementById('edit-ptask-cancel').addEventListener('click', closeEditPersonalTask);
@@ -2578,7 +2648,7 @@ function renderDaySummary(){
       if(!t) return;
       setTaskStatusForDate(t, todayStr, sel.value);
       renderAllTaskViews();
-      await savePersonalTasks();
+      await saveOneTask(t);
     });
   });
 
@@ -2614,7 +2684,7 @@ async function reorderNoTimeTasks(dateStr, draggedId, targetId){
   group.splice(toIdx,0,moved);
   group.forEach((t,i)=>{ t.order = i; });
   renderDaySummary();
-  await savePersonalTasks();
+  await saveTasksMulti(group);
 }
 
 </script>
