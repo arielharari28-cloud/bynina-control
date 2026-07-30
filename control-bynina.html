@@ -334,6 +334,10 @@
     color:var(--red);
     font-weight:700;
   }
+  .pending-anterior-btn{
+    border:none;cursor:pointer;font-family:inherit;
+  }
+  .pending-anterior-btn:hover{opacity:.75;}
   .time-badge{
     background:var(--purple-soft);
     color:var(--purple);
@@ -1394,6 +1398,19 @@ function repeatingTaskPendingFromBefore(t, todayStr){
   return Object.keys(t.statusDates).some(dStr => dStr < todayStr && t.statusDates[dStr] !== 'finalizado');
 }
 
+// Saca el arrastre de días anteriores sin resolver (el badge "pendiente anterior"),
+// sin tocar el estado de hoy — para tareas que se repiten y no hace falta "ponerse al día".
+async function dismissPendingAnterior(id){
+  const t = personalTasks.find(x=>x.id===id);
+  if(!t || !t.statusDates) return;
+  const todayStr = todayKey();
+  Object.keys(t.statusDates).forEach(dStr=>{
+    if(dStr < todayStr) delete t.statusDates[dStr];
+  });
+  renderAllTaskViews();
+  await savePersonalTasks();
+}
+
 // Una tarea que se repite no tiene un único "resolved": se marca hecha por día (doneDates).
 // Una tarea normal sigue usando el campo resolved de siempre.
 function isTaskDoneForDate(t, dateStr){
@@ -1487,9 +1504,6 @@ function renderMidiaPersonTasks(){
   const filtered = personalTasks.filter(t=>t.assignedPerson===midiaFilterPerson);
   const todayStr = todayKey();
   const pending = filtered.filter(t=>taskRepeatType(t)!=='none' || !isTaskDoneForDate(t, todayStr)).sort((a,b)=>{
-    if(a.order !== undefined && b.order !== undefined && a.order !== b.order) return a.order - b.order;
-    if(a.order !== undefined && b.order === undefined) return -1;
-    if(a.order === undefined && b.order !== undefined) return 1;
     const da = effectiveDueKey(a), db = effectiveDueKey(b);
     if(da && db){
       const cmp = da.localeCompare(db);
@@ -2480,7 +2494,7 @@ function renderDaySummary(){
   const overdueLabel = (t) => {
     if(taskRepeatType(t) !== 'none'){
       return repeatingTaskPendingFromBefore(t, todayStr) ?
-        `<span class="due-badge overdue">pendiente anterior</span>` : '';
+        `<button class="due-badge overdue pending-anterior-btn" onclick="dismissPendingAnterior('${t.id}')" title="Sacar el arrastre de días anteriores">pendiente anterior ✕</button>` : '';
     }
     return (t.dueDate && t.dueDate !== todayStr) ?
       `<span class="due-badge overdue">atrasada · venció ${fmtDue(t.dueDate)}</span>` : '';
@@ -2488,7 +2502,7 @@ function renderDaySummary(){
   const pendingLabel = (t) => {
     if(taskRepeatType(t) !== 'none'){
       return repeatingTaskPendingFromBefore(t, todayStr) ?
-        `<span class="due-badge overdue">pendiente anterior</span>` : '';
+        `<button class="due-badge overdue pending-anterior-btn" onclick="dismissPendingAnterior('${t.id}')" title="Sacar el arrastre de días anteriores">pendiente anterior ✕</button>` : '';
     }
     return (t.dueDate && t.dueDate !== todayStr) ?
       `<span class="due-badge">pendiente</span>` : '';
