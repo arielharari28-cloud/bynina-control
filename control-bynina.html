@@ -2568,9 +2568,9 @@ function renderDaySummary(){
     return;
   }
   const withTime = dayTasks.filter(t=>t.time).sort((a,b)=>{
-    const cmp = (a.dueDate||'').localeCompare(b.dueDate||'');
+    const cmp = a.time.localeCompare(b.time);
     if(cmp !== 0) return cmp;
-    return a.time.localeCompare(b.time);
+    return (a.dueDate||'').localeCompare(b.dueDate||'');
   });
   const noTime = dayTasks.filter(t=>!t.time).sort((a,b)=>{
     const cmp = (a.dueDate||'').localeCompare(b.dueDate||'');
