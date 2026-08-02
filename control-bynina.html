@@ -346,6 +346,29 @@
     background:var(--rust-soft);
     color:var(--rust);
   }
+  .weekday-picker{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+    margin-top:6px;
+  }
+  .weekday-btn{
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:12px;
+    padding:5px 10px;
+    border-radius:12px;
+    border:1px solid var(--line);
+    background:#fff;
+    color:var(--ink-soft);
+    cursor:pointer;
+  }
+  .weekday-btn:hover{border-color:var(--rust);}
+  .weekday-btn.active{
+    background:var(--rust);
+    border-color:var(--rust);
+    color:#fff;
+  }
   .task-status-select{
     font-family:'Inter',sans-serif;
     font-weight:600;
@@ -1018,6 +1041,7 @@
       <select id="task-repeat"></select>
       <button id="task-add-btn">Agregar</button>
     </div>
+    <div class="weekday-picker" id="task-repeat-days" style="display:none;"></div>
   </div>
   <div class="filters" id="task-filters"></div>
   <div id="task-list"><div class="empty">Cargando...</div></div>
@@ -1060,6 +1084,7 @@
     <div class="modal-field">
       <label for="edit-ptask-repeat">Repetición</label>
       <select id="edit-ptask-repeat"></select>
+      <div class="weekday-picker" id="edit-ptask-repeat-days" style="display:none;"></div>
     </div>
     <div class="modal-footer">
       <button class="modal-cancel-btn" id="edit-ptask-cancel">Cancelar</button>
@@ -1306,13 +1331,57 @@ const peopleAndCategoryConfigReady = (async ()=>{
 /* ===== Repetición flexible (ninguna / diaria / semanal / cada 15 días / mensual) ===== */
 const REPEAT_LABELS = {
   none:'No se repite', daily:'Todos los días', weekly:'Cada semana',
-  biweekly:'Cada 15 días', monthly:'Cada mes'
+  biweekly:'Cada 15 días', monthly:'Cada mes', custom:'Días específicos...'
 };
 
 function repeatSelectOptionsHtml(selected){
   return Object.entries(REPEAT_LABELS).map(([k,v])=>
     `<option value="${k}" ${k===(selected||'none')?'selected':''}>${v}</option>`
   ).join('');
+}
+
+// Días de la semana al estilo Google Tasks (tildar directamente Lun/Mar/Mié/...).
+// index = t.getDay() de JS (0=domingo...6=sábado); el orden de despliegue es lun→dom.
+const WEEKDAY_ORDER = [1,2,3,4,5,6,0];
+const WEEKDAY_SHORT = {1:'Lun',2:'Mar',3:'Mié',4:'Jue',5:'Vie',6:'Sáb',0:'Dom'};
+
+function weekdayPickerHtml(containerId, selectedDays){
+  const sel = selectedDays || [];
+  return WEEKDAY_ORDER.map(d=>
+    `<button type="button" class="weekday-btn ${sel.includes(d)?'active':''}" data-container="${containerId}" data-day="${d}">${WEEKDAY_SHORT[d]}</button>`
+  ).join('');
+}
+
+// Texto corto para mostrar en los badges de tareas con "Días específicos" (ej: "Lun, Mié, Vie").
+function customDaysLabel(t){
+  const days = (t.repeatDays && t.repeatDays.length) ? t.repeatDays : [];
+  if(!days.length) return REPEAT_LABELS.custom.toLowerCase();
+  return WEEKDAY_ORDER.filter(d=>days.includes(d)).map(d=>WEEKDAY_SHORT[d]).join(', ');
+}
+function repeatLabelForTask(t){
+  const type = taskRepeatType(t);
+  if(type === 'custom') return customDaysLabel(t);
+  return REPEAT_LABELS[type].toLowerCase();
+}
+
+// Selección de días en curso para el formulario de "Agregar" (se resetea después de crear la tarea).
+let taskRepeatDaysDraft = [];
+function renderTaskRepeatDaysPicker(){
+  const sel = document.getElementById('task-repeat');
+  const el = document.getElementById('task-repeat-days');
+  const isCustom = sel.value === 'custom';
+  el.style.display = isCustom ? 'flex' : 'none';
+  if(isCustom) el.innerHTML = weekdayPickerHtml('task-repeat-days', taskRepeatDaysDraft);
+}
+
+// Selección de días en curso para el modal de edición.
+let editRepeatDaysDraft = [];
+function renderEditRepeatDaysPicker(){
+  const sel = document.getElementById('edit-ptask-repeat');
+  const el = document.getElementById('edit-ptask-repeat-days');
+  const isCustom = sel.value === 'custom';
+  el.style.display = isCustom ? 'flex' : 'none';
+  if(isCustom) el.innerHTML = weekdayPickerHtml('edit-ptask-repeat-days', editRepeatDaysDraft);
 }
 
 // Compatibilidad: tareas viejas guardaron repeatDaily:true en vez de repeat:'daily'.
@@ -1333,6 +1402,11 @@ function taskRecursOnDate(t, dateStr){
   const type = taskRepeatType(t);
   if(type === 'none') return false;
   if(type === 'daily') return true;
+  if(type === 'custom'){
+    if(!t.repeatDays || !t.repeatDays.length) return false;
+    const d = new Date(dateStr+'T00:00:00');
+    return t.repeatDays.includes(d.getDay());
+  }
   const anchor = t.dueDate || todayKey();
   if(dateStr < anchor) return false;
   const diff = daysBetweenKeys(anchor, dateStr);
@@ -1651,7 +1725,7 @@ function repeatBadgeHtml(t){
   if(type === 'none') return null;
   const next = nextRecurrence(t);
   const overdue = next < todayKey();
-  return `<span class="due-badge repeat-badge">🔁 ${REPEAT_LABELS[type].toLowerCase()}</span><span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(next)}</span>`;
+  return `<span class="due-badge repeat-badge">🔁 ${repeatLabelForTask(t)}</span><span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(next)}</span>`;
 }
 
 function renderShareLinks(){
@@ -1794,6 +1868,16 @@ wireInlineCreateSelect('edit-ptask-person', '__new_person__', 'Nombre de la nuev
   document.getElementById('task-area').innerHTML = areaSelectOptionsHtml('nina');
   document.getElementById('task-category').innerHTML = categorySelectOptionsHtml('otro');
   document.getElementById('task-repeat').innerHTML = repeatSelectOptionsHtml('none');
+  renderTaskRepeatDaysPicker();
+  document.getElementById('task-repeat').addEventListener('change', renderTaskRepeatDaysPicker);
+  document.getElementById('task-repeat-days').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.weekday-btn');
+    if(!btn) return;
+    const day = Number(btn.dataset.day);
+    const idx = taskRepeatDaysDraft.indexOf(day);
+    if(idx === -1) taskRepeatDaysDraft.push(day); else taskRepeatDaysDraft.splice(idx,1);
+    renderTaskRepeatDaysPicker();
+  });
   renderDateHeader();
   populateTaskPersonSelect();
   if(isAdmin){
@@ -2451,6 +2535,10 @@ async function addPersonalTask(){
     alert('Elegí quién es el responsable de la tarea.');
     return;
   }
+  if(repeatEl.value === 'custom' && !taskRepeatDaysDraft.length){
+    alert('Elegí al menos un día de la semana.');
+    return;
+  }
   const btn = document.getElementById('task-add-btn');
   btn.disabled = true;
   const newTask = {
@@ -2465,10 +2553,13 @@ async function addPersonalTask(){
     resolved: false,
     repeat: repeatEl.value || 'none'
   };
+  if(newTask.repeat === 'custom') newTask.repeatDays = [...taskRepeatDaysDraft];
   personalTasks.push(newTask);
   textEl.value = '';
   timeEl.value = '';
   repeatEl.value = 'none';
+  taskRepeatDaysDraft = [];
+  renderTaskRepeatDaysPicker();
   renderAllTaskViews();
   await saveOneTask(newTask);
   btn.disabled = false;
@@ -2497,6 +2588,8 @@ function openEditPersonalTask(id){
   document.getElementById('edit-ptask-time').value = t.time || '';
   document.getElementById('edit-ptask-text').value = t.text;
   document.getElementById('edit-ptask-repeat').innerHTML = repeatSelectOptionsHtml(taskRepeatType(t));
+  editRepeatDaysDraft = t.repeatDays ? [...t.repeatDays] : [];
+  renderEditRepeatDaysPicker();
   document.getElementById('edit-ptask-status').innerHTML = taskStatusSelectHtml(t, todayKey());
   populateEditPtaskPersonSelect();
   const personSel = document.getElementById('edit-ptask-person');
@@ -2539,7 +2632,14 @@ async function saveEditPersonalTask(){
   t.category = document.getElementById('edit-ptask-category').value || 'otro';
   t.dueDate = document.getElementById('edit-ptask-due').value || '';
   t.time = document.getElementById('edit-ptask-time').value || '';
-  t.repeat = document.getElementById('edit-ptask-repeat').value || 'none';
+  const newRepeat = document.getElementById('edit-ptask-repeat').value || 'none';
+  if(newRepeat === 'custom' && !editRepeatDaysDraft.length){
+    alert('Elegí al menos un día de la semana.');
+    return;
+  }
+  t.repeat = newRepeat;
+  if(newRepeat === 'custom') t.repeatDays = [...editRepeatDaysDraft];
+  else delete t.repeatDays;
   setTaskStatusForDate(t, todayKey(), document.getElementById('edit-ptask-status').value);
   if(isAdmin){
     t.assignedPerson = document.getElementById('edit-ptask-person').value || '';
@@ -2553,6 +2653,15 @@ document.getElementById('edit-ptask-cancel').addEventListener('click', closeEdit
 document.getElementById('edit-ptask-save').addEventListener('click', saveEditPersonalTask);
 document.getElementById('edit-ptask-modal').addEventListener('click', (e)=>{
   if(e.target.id === 'edit-ptask-modal') closeEditPersonalTask();
+});
+document.getElementById('edit-ptask-repeat').addEventListener('change', renderEditRepeatDaysPicker);
+document.getElementById('edit-ptask-repeat-days').addEventListener('click', (e)=>{
+  const btn = e.target.closest('.weekday-btn');
+  if(!btn) return;
+  const day = Number(btn.dataset.day);
+  const idx = editRepeatDaysDraft.indexOf(day);
+  if(idx === -1) editRepeatDaysDraft.push(day); else editRepeatDaysDraft.splice(idx,1);
+  renderEditRepeatDaysPicker();
 });
 
 let dragTicketId = null;
@@ -2606,7 +2715,7 @@ function renderDaySummary(){
   const repeatTagHtml = (t) => {
     const type = taskRepeatType(t);
     if(type === 'none') return '';
-    return `<span class="due-badge repeat-badge">🔁 ${REPEAT_LABELS[type].toLowerCase()}</span>`;
+    return `<span class="due-badge repeat-badge">🔁 ${repeatLabelForTask(t)}</span>`;
   };
 
   let html = withTime.map(t => {
