@@ -52,75 +52,6 @@
     color:var(--ink-soft);
   }
 
-  /* Shared morning plan board */
-  .plan-board{
-    background:var(--purple);
-    border-radius:12px;
-    padding:16px 16px 14px 16px;
-    margin-bottom:20px;
-    color:#fff;
-  }
-  .plan-header{margin-bottom:12px;}
-  .plan-title{
-    font-family:'Poppins',sans-serif;
-    font-weight:600;
-    font-size:16px;
-  }
-  .plan-sub{
-    font-family:'Inter',sans-serif;
-    font-size:12px;
-    color:#d9d4ef;
-    margin-top:2px;
-  }
-  .plan-field{margin-bottom:10px;}
-  .plan-field label{
-    display:block;
-    font-family:'Poppins',sans-serif;
-    font-size:12px;
-    font-weight:600;
-    color:#efecfa;
-    margin-bottom:5px;
-  }
-  .plan-field textarea{
-    width:100%;
-    min-height:60px;
-    background:#fff;
-    color:var(--ink);
-    border:none;
-    border-radius:8px;
-  }
-  .plan-footer{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap:10px;
-    flex-wrap:wrap;
-  }
-  .plan-updated{
-    font-family:'Inter',sans-serif;
-    font-size:12px;
-    color:#d9d4ef;
-  }
-  .plan-footer button{
-    background:#fff;
-    color:var(--purple);
-  }
-  .plan-field textarea[readonly]{
-    background:#f0eef7;
-    color:var(--ink);
-    cursor:default;
-  }
-  .plan-board.readonly .plan-footer button{display:none;}
-  .plan-toggle{
-    font-family:'Inter',sans-serif;
-    font-size:11px;
-    color:#c9c3e6;
-    text-align:right;
-    margin-top:8px;
-    cursor:pointer;
-    text-decoration:underline;
-  }
-
   /* Quick capture */
   .capture{
     background:var(--card);
@@ -943,6 +874,20 @@
     color:var(--ink-soft);
     margin:10px 0 4px;
   }
+  .day-summary-columns{
+    display:flex;
+    gap:14px;
+    align-items:flex-start;
+  }
+  .day-summary-col{
+    flex:1 1 0;
+    min-width:0;
+  }
+  @media (max-width:720px){
+    .day-summary-columns{
+      flex-direction:column;
+    }
+  }
   .draggable-row{cursor:grab;}
   .draggable-row:active{cursor:grabbing;}
   .draggable-row.dragging{opacity:.4;}
@@ -958,27 +903,22 @@
     <div class="datestamp" id="today"></div>
   </header>
 
-  <div id="admin-only-top">
-  <div class="plan-board" id="plan-board">
-    <div class="plan-header">
-      <div class="plan-title">Plan de mañana — corte y control</div>
-      <div class="plan-sub">Visible para todo el que abra este link</div>
+  <div class="section-title st-rust">➕ Agregar tarea</div>
+  <div class="capture">
+    <div class="capture-row">
+      <select id="task-area"></select>
+      <select id="task-category"></select>
+      <select id="task-person"></select>
+      <input type="date" id="task-due-date">
+      <input type="time" id="task-time-input">
+      <textarea id="task-text-input" placeholder="Qué tenés que hacer..."></textarea>
+      <select id="task-repeat"></select>
+      <button id="task-add-btn">Agregar</button>
     </div>
-    <div class="plan-field">
-      <label for="plan-corte">Corte prioritario (Ari Chico / Ale)</label>
-      <textarea id="plan-corte" placeholder="Qué se corta mañana, en orden..."></textarea>
-    </div>
-    <div class="plan-field">
-      <label for="plan-noemi">Indicación para Noemi</label>
-      <textarea id="plan-noemi" placeholder="Qué controlar/contar mañana..."></textarea>
-    </div>
-    <div class="plan-footer">
-      <span class="plan-updated" id="plan-updated">sin actualizar todavía</span>
-      <button id="plan-save-btn">Guardar plan</button>
-    </div>
-    <div class="plan-toggle" id="plan-toggle">Soy Ariel — activar edición</div>
+    <div class="weekday-picker" id="task-repeat-days" style="display:none;"></div>
   </div>
 
+  <div id="admin-only-top">
   <div class="section-title st-purple" id="share-links-toggle" style="cursor:pointer;">🔗 Links para el equipo — tocá para ver</div>
   <div id="share-links-panel" style="display:none;"></div>
 
@@ -1020,8 +960,16 @@
     <button id="next-day">›</button>
   </div>
 
-  <div class="section-title st-green" id="summary-section-title">Resumen de tu día</div>
-  <div class="day-summary-card" id="day-summary"><div class="empty">Cargando...</div></div>
+  <div class="day-summary-columns">
+    <div class="day-summary-col">
+      <div class="section-title st-green" id="summary-section-title">Resumen de tu día</div>
+      <div class="day-summary-card" id="day-summary"><div class="empty">Cargando...</div></div>
+    </div>
+    <div class="day-summary-col">
+      <div class="section-title st-purple">Pendientes por asignar</div>
+      <div class="day-summary-card" id="day-summary-nodate"><div class="empty">Cargando...</div></div>
+    </div>
+  </div>
 
   <div id="admin-only-midia-person">
   <div class="section-title st-purple">Pendientes por persona</div>
@@ -1030,19 +978,6 @@
   </div>
 
   <div class="section-title st-rust">Mis tareas</div>
-  <div class="capture">
-    <div class="capture-row">
-      <select id="task-area"></select>
-      <select id="task-category"></select>
-      <select id="task-person"></select>
-      <input type="date" id="task-due-date">
-      <input type="time" id="task-time-input">
-      <textarea id="task-text-input" placeholder="Qué tenés que hacer..."></textarea>
-      <select id="task-repeat"></select>
-      <button id="task-add-btn">Agregar</button>
-    </div>
-    <div class="weekday-picker" id="task-repeat-days" style="display:none;"></div>
-  </div>
   <div class="filters" id="task-filters"></div>
   <div id="task-list"><div class="empty">Cargando...</div></div>
 
@@ -1627,79 +1562,6 @@ function renderToday(){
   document.getElementById('today').textContent = s;
 }
 
-const PLAN_KEY = 'control-bynina:plan-manana';
-const EDIT_MODE_KEY = 'control-bynina:edit-mode';
-let editMode = false;
-
-function applyEditMode(){
-  const board = document.getElementById('plan-board');
-  const corte = document.getElementById('plan-corte');
-  const noemi = document.getElementById('plan-noemi');
-  if(editMode){
-    board.classList.remove('readonly');
-    corte.removeAttribute('readonly');
-    noemi.removeAttribute('readonly');
-    document.getElementById('plan-toggle').textContent = 'Modo edición activo — tocar para volver a solo lectura';
-  }else{
-    board.classList.add('readonly');
-    corte.setAttribute('readonly','true');
-    noemi.setAttribute('readonly','true');
-    document.getElementById('plan-toggle').textContent = 'Soy Ariel — activar edición';
-  }
-}
-
-async function toggleEditMode(){
-  editMode = !editMode;
-  applyEditMode();
-  try{
-    localStorage.setItem(EDIT_MODE_KEY, editMode ? 'true' : 'false');
-  }catch(e){}
-}
-
-async function loadEditMode(){
-  try{
-    editMode = localStorage.getItem(EDIT_MODE_KEY) === 'true';
-  }catch(e){
-    editMode = false;
-  }
-  applyEditMode();
-}
-
-document.getElementById('plan-toggle').addEventListener('click', toggleEditMode);
-
-async function loadPlan(){
-  try{
-    const val = await fbGet('control_bynina/plan_manana');
-    if(val){
-      const data = JSON.parse(val);
-      document.getElementById('plan-corte').value = data.corte || '';
-      document.getElementById('plan-noemi').value = data.noemi || '';
-      document.getElementById('plan-updated').textContent = data.ts ? ('última actualización ' + fmtTime(data.ts)) : 'sin actualizar todavía';
-    }
-  }catch(e){
-    // no plan saved yet
-  }
-}
-
-async function savePlan(){
-  const btn = document.getElementById('plan-save-btn');
-  btn.disabled = true;
-  const data = {
-    corte: document.getElementById('plan-corte').value.trim(),
-    noemi: document.getElementById('plan-noemi').value.trim(),
-    ts: Date.now()
-  };
-  try{
-    await fbSet('control_bynina/plan_manana', JSON.stringify(data));
-    document.getElementById('plan-updated').textContent = 'última actualización ' + fmtTime(data.ts);
-  }catch(e){
-    document.getElementById('plan-updated').textContent = 'error al guardar, probá de nuevo';
-  }
-  btn.disabled = false;
-}
-
-document.getElementById('plan-save-btn').addEventListener('click', savePlan);
-
 function fmtDue(dueStr){
   if(!dueStr) return '';
   const [y,m,d] = dueStr.split('-');
@@ -1864,7 +1726,6 @@ wireInlineCreateSelect('edit-ptask-person', '__new_person__', 'Nombre de la nuev
   await migrateTeamTasksIfNeeded();
   await dedupePersonalTasksIfNeeded();
   await migrateToTasksV2IfNeeded();
-  document.getElementById('task-due-date').value = dateKey(new Date());
   document.getElementById('task-area').innerHTML = areaSelectOptionsHtml('nina');
   document.getElementById('task-category').innerHTML = categorySelectOptionsHtml('otro');
   document.getElementById('task-repeat').innerHTML = repeatSelectOptionsHtml('none');
@@ -1880,10 +1741,6 @@ wireInlineCreateSelect('edit-ptask-person', '__new_person__', 'Nombre de la nuev
   });
   renderDateHeader();
   populateTaskPersonSelect();
-  if(isAdmin){
-    await loadPlan();
-    await loadEditMode();
-  }
   // A partir de acá, personalTasks se mantiene sincronizado en vivo con Firebase:
   // este listener se dispara ahora con la primera carga, y de nuevo cada vez que
   // cambia algo (lo hagas vos u otra persona en otra pantalla).
@@ -2666,26 +2523,37 @@ document.getElementById('edit-ptask-repeat-days').addEventListener('click', (e)=
 
 let dragTicketId = null;
 let dragSummaryId = null;
+let dragSummaryNoDateId = null;
 
 function renderDaySummary(){
+  renderDatedSummary();
+  renderNoDateSummary();
+}
+
+// Tareas del viewer que aplican al día que se está mirando (hoy o el navegado), sin contar
+// las que no tienen fecha en absoluto (esas viven aparte, en "Pendientes por asignar").
+function getDayTasksForViewer(todayStr){
+  return (personalTasks||[]).filter(t => t.assignedPerson === viewerPerson && !(!t.dueDate && taskRepeatType(t)==='none') && taskAppliesToDate(t, todayStr) && !isTaskDoneForDate(t, todayStr));
+}
+
+function renderDatedSummary(){
   const el = document.getElementById('day-summary');
   if(!el) return;
   const todayStr = dateKey(currentDate);
-  const dayTasks = (personalTasks||[]).filter(t => t.assignedPerson === viewerPerson && taskAppliesToDate(t, todayStr) && !isTaskDoneForDate(t, todayStr));
-  if(!dayTasks.length){
-    el.innerHTML = '<div class="empty">Sin pendientes para este día.</div>';
-    return;
-  }
+  const dayTasks = getDayTasksForViewer(todayStr);
+  // Prioridad de orden: primero lo vencido (atrasado), después por fecha.
+  const isOverdueTask = (t) => taskRepeatType(t)==='none' && t.dueDate && t.dueDate < todayStr;
   const withTime = dayTasks.filter(t=>t.time).sort((a,b)=>{
-    const cmp = a.time.localeCompare(b.time);
-    if(cmp !== 0) return cmp;
-    return (a.dueDate||'').localeCompare(b.dueDate||'');
-  });
-  const noTime = dayTasks.filter(t=>!t.time).sort((a,b)=>{
+    const oa = isOverdueTask(a)?0:1, ob = isOverdueTask(b)?0:1;
+    if(oa !== ob) return oa - ob;
     const cmp = (a.dueDate||'').localeCompare(b.dueDate||'');
     if(cmp !== 0) return cmp;
-    return (a.order ?? a.ts) - (b.order ?? b.ts);
+    return a.time.localeCompare(b.time);
   });
+  if(!withTime.length){
+    el.innerHTML = '<div class="empty">Sin tareas con horario para este día.</div>';
+    return;
+  }
 
   // Las tareas que se repiten todos los días NUNCA deben mostrarse como "vencidas": su dueDate
   // es solo la fecha original de creación, no una fecha límite. Si vienen arrastrando una
@@ -2697,14 +2565,6 @@ function renderDaySummary(){
     }
     return (t.dueDate && t.dueDate !== todayStr) ?
       `<span class="due-badge overdue">atrasada · venció ${fmtDue(t.dueDate)}</span>` : '';
-  };
-  const pendingLabel = (t) => {
-    if(taskRepeatType(t) !== 'none'){
-      return repeatingTaskPendingFromBefore(t, todayStr) ?
-        `<button class="due-badge overdue pending-anterior-btn" onclick="dismissPendingAnterior('${t.id}')" title="Sacar el arrastre de días anteriores">pendiente anterior ✕</button>` : '';
-    }
-    return (t.dueDate && t.dueDate !== todayStr) ?
-      `<span class="due-badge">pendiente</span>` : '';
   };
 
   const statusSelectHtml = (t) => {
@@ -2737,26 +2597,6 @@ function renderDaySummary(){
   `;
   }).join('');
 
-  if(noTime.length){
-    html += `<div class="summary-subtitle">Sin horario fijo — arrastrá para reordenar</div>`;
-    html += noTime.map(t => {
-      const responsableName = personalTaskResponsibleName(t);
-      const responsableLabel = responsableName ? `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(responsableName)}</span>` : '';
-      const postponeBtn = taskRepeatType(t)!=='none' ? '' : `<button class="edit-btn summary-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
-      return `
-      <div class="summary-row draggable-row ${responsableName?'summary-row-shared':''}" draggable="true" data-id="${t.id}">
-        <div class="summary-check" data-id="${t.id}"></div>
-        <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
-        ${responsableLabel}
-        ${repeatTagHtml(t)}
-        ${pendingLabel(t)}
-        ${statusSelectHtml(t)}
-        ${postponeBtn}
-        <button class="edit-btn summary-edit" data-id="${t.id}" title="Editar">✎</button>
-      </div>
-    `;
-    }).join('');
-  }
   el.innerHTML = html;
 
   el.querySelectorAll('.summary-check').forEach(chk=>{
@@ -2791,15 +2631,122 @@ function renderDaySummary(){
       await saveOneTask(t);
     });
   });
+}
 
-  el.querySelectorAll('.draggable-row').forEach(row=>{
+// "Pendientes por asignar": junta dos grupos que necesitan que decidas cuándo hacerlos
+// en el momento — (a) tareas del día que se está mirando sin un horario puntual, y
+// (b) tareas que directamente no tienen ninguna fecha asignada. Primero lo vencido,
+// después por fecha, y al final las que no tienen fecha en absoluto.
+function getPendientesPorAsignar(todayStr){
+  const dayTasks = getDayTasksForViewer(todayStr);
+  const noTimeScheduled = dayTasks.filter(t=>!t.time);
+  const noDateTasks = (personalTasks||[]).filter(t => t.assignedPerson === viewerPerson && taskRepeatType(t)==='none' && !t.dueDate && !isTaskDoneForDate(t, todayStr));
+  const combined = [...noTimeScheduled, ...noDateTasks];
+  const rank = (t) => {
+    if(!t.dueDate) return 2;
+    if(taskRepeatType(t)==='none' && t.dueDate < todayStr) return 0;
+    return 1;
+  };
+  combined.sort((a,b)=>{
+    const ra = rank(a), rb = rank(b);
+    if(ra !== rb) return ra - rb;
+    if(ra === 2) return (a.order ?? a.ts) - (b.order ?? b.ts);
+    const cmp = (a.dueDate||'').localeCompare(b.dueDate||'');
+    if(cmp !== 0) return cmp;
+    return (a.order ?? a.ts) - (b.order ?? b.ts);
+  });
+  return combined;
+}
+
+function renderNoDateSummary(){
+  const el = document.getElementById('day-summary-nodate');
+  if(!el) return;
+  const todayStr = dateKey(currentDate);
+  const combined = getPendientesPorAsignar(todayStr);
+  if(!combined.length){
+    el.innerHTML = '<div class="empty">No hay tareas pendientes por asignar.</div>';
+    return;
+  }
+
+  const overdueLabel = (t) => {
+    if(taskRepeatType(t) !== 'none'){
+      return repeatingTaskPendingFromBefore(t, todayStr) ?
+        `<button class="due-badge overdue pending-anterior-btn" onclick="dismissPendingAnterior('${t.id}')" title="Sacar el arrastre de días anteriores">pendiente anterior ✕</button>` : '';
+    }
+    return (t.dueDate && t.dueDate !== todayStr) ?
+      `<span class="due-badge overdue">atrasada · venció ${fmtDue(t.dueDate)}</span>` : '';
+  };
+
+  const statusSelectHtml = (t) => {
+    const statusVal = getTaskStatusForDate(t, todayStr);
+    return `<select class="task-status-select summary-status-select" data-id="${t.id}" style="color:${TASK_STATUS_COLOR[statusVal]}">${taskStatusSelectHtml(t, todayStr)}</select>`;
+  };
+
+  const repeatTagHtml = (t) => {
+    const type = taskRepeatType(t);
+    if(type === 'none') return '';
+    return `<span class="due-badge repeat-badge">🔁 ${repeatLabelForTask(t)}</span>`;
+  };
+
+  el.innerHTML = combined.map(t => {
+    const responsableName = personalTaskResponsibleName(t);
+    const responsableLabel = responsableName ? `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(responsableName)}</span>` : '';
+    const postponeBtn = taskRepeatType(t)!=='none' ? '' : `<button class="edit-btn summary-postpone" data-id="${t.id}" title="${t.dueDate?'Posponer a mañana':'Asignar fecha para mañana'}">⏭</button>`;
+    return `
+    <div class="summary-row draggable-nodate-row ${responsableName?'summary-row-shared':''}" draggable="true" data-id="${t.id}">
+      <div class="summary-check" data-id="${t.id}"></div>
+      <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
+      ${responsableLabel}
+      ${repeatTagHtml(t)}
+      ${overdueLabel(t)}
+      ${statusSelectHtml(t)}
+      ${postponeBtn}
+      <button class="edit-btn summary-edit" data-id="${t.id}" title="Editar">✎</button>
+    </div>
+  `;
+  }).join('');
+
+  el.querySelectorAll('.summary-check').forEach(chk=>{
+    chk.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      togglePersonalTaskResolved(chk.dataset.id);
+    });
+  });
+
+  el.querySelectorAll('.summary-edit').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      openEditPersonalTask(btn.dataset.id);
+    });
+  });
+
+  el.querySelectorAll('.summary-postpone').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      postponePersonalTask(btn.dataset.id);
+    });
+  });
+
+  el.querySelectorAll('.summary-status-select').forEach(sel=>{
+    sel.addEventListener('click', (e)=>e.stopPropagation());
+    sel.addEventListener('change', async (e)=>{
+      e.stopPropagation();
+      const t = personalTasks.find(x=>x.id===sel.dataset.id);
+      if(!t) return;
+      setTaskStatusForDate(t, todayStr, sel.value);
+      renderAllTaskViews();
+      await saveOneTask(t);
+    });
+  });
+
+  el.querySelectorAll('.draggable-nodate-row').forEach(row=>{
     row.addEventListener('dragstart', ()=>{
-      dragSummaryId = row.dataset.id;
+      dragSummaryNoDateId = row.dataset.id;
       row.classList.add('dragging');
     });
     row.addEventListener('dragend', ()=>{
       row.classList.remove('dragging');
-      dragSummaryId = null;
+      dragSummaryNoDateId = null;
     });
     row.addEventListener('dragover', (e)=>{
       e.preventDefault();
@@ -2807,16 +2754,14 @@ function renderDaySummary(){
     row.addEventListener('drop', async (e)=>{
       e.preventDefault();
       const targetId = row.dataset.id;
-      if(!dragSummaryId || dragSummaryId === targetId) return;
-      await reorderNoTimeTasks(todayStr, dragSummaryId, targetId);
+      if(!dragSummaryNoDateId || dragSummaryNoDateId === targetId) return;
+      await reorderNoDateTasks(todayStr, dragSummaryNoDateId, targetId);
     });
   });
 }
 
-async function reorderNoTimeTasks(dateStr, draggedId, targetId){
-  const group = personalTasks
-    .filter(t => taskAppliesToDate(t, dateStr) && !isTaskDoneForDate(t, dateStr) && !t.time)
-    .sort((a,b)=>(a.order ?? a.ts) - (b.order ?? b.ts));
+async function reorderNoDateTasks(todayStr, draggedId, targetId){
+  const group = getPendientesPorAsignar(todayStr);
   const fromIdx = group.findIndex(t=>t.id===draggedId);
   const toIdx = group.findIndex(t=>t.id===targetId);
   if(fromIdx === -1 || toIdx === -1) return;
