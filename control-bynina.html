@@ -2194,7 +2194,7 @@ function urgencyKeyOf(t){
 function personalTasksPendingForPanorama(){
   const todayStr = todayKey();
   return (personalTasks||[]).filter(t=>{
-    if(taskRepeatType(t) !== 'none') return !isTaskDoneForDate(t, todayStr) || repeatingTaskPendingFromBefore(t, todayStr);
+    if(taskRepeatType(t) !== 'none') return !isTaskDoneForDate(t, todayStr);
     return !t.resolved;
   });
 }
@@ -3102,13 +3102,11 @@ function renderDatedSummary(){
   }
 
   // Las tareas que se repiten todos los días NUNCA deben mostrarse como "vencidas": su dueDate
-  // es solo la fecha original de creación, no una fecha límite. Si vienen arrastrando una
-  // ocurrencia anterior sin resolver, avisamos con "pendiente anterior" en vez de "venció".
+  // es solo la fecha original de creación, no una fecha límite. Ya no arrastramos el aviso de
+  // "pendiente anterior" de días previos sin marcar — ese historial queda igual guardado en
+  // statusDates (por si algún día hace falta mirarlo), pero deja de empujarse a la vista de hoy.
   const overdueLabel = (t) => {
-    if(taskRepeatType(t) !== 'none'){
-      return repeatingTaskPendingFromBefore(t, todayStr) ?
-        `<button class="due-badge overdue pending-anterior-btn" onclick="dismissPendingAnterior('${t.id}')" title="Sacar el arrastre de días anteriores">pendiente anterior ✕</button>` : '';
-    }
+    if(taskRepeatType(t) !== 'none') return '';
     return (t.dueDate && t.dueDate !== todayStr) ?
       `<span class="due-badge overdue">atrasada · venció ${fmtDue(t.dueDate)}</span>` : '';
   };
@@ -3217,10 +3215,7 @@ function renderNoDateSummary(){
   }
 
   const overdueLabel = (t) => {
-    if(taskRepeatType(t) !== 'none'){
-      return repeatingTaskPendingFromBefore(t, todayStr) ?
-        `<button class="due-badge overdue pending-anterior-btn" onclick="dismissPendingAnterior('${t.id}')" title="Sacar el arrastre de días anteriores">pendiente anterior ✕</button>` : '';
-    }
+    if(taskRepeatType(t) !== 'none') return '';
     return (t.dueDate && t.dueDate !== todayStr) ?
       `<span class="due-badge overdue">atrasada · venció ${fmtDue(t.dueDate)}</span>` : '';
   };
