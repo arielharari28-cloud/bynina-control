@@ -291,6 +291,18 @@
     border-radius:10px;padding:4px 10px;font-weight:700;cursor:pointer;font-size:12px;
     flex-shrink:0;
   }
+  .band{border-radius:14px;margin-bottom:12px;overflow:hidden;border:1px solid var(--line);}
+  .band-head{font-family:'Poppins',sans-serif;font-weight:700;font-size:13px;padding:9px 14px;display:flex;justify-content:space-between;align-items:center;}
+  .band-body{background:var(--card);padding:0 12px;}
+  .band-body .ticket{margin:10px 0;}
+  .band.vencida .band-head{background:var(--red-soft);color:var(--red);}
+  .band.hoy .band-head{background:#fbe3cf;color:#9a5a1a;}
+  .band.pronto .band-head{background:#faf1c8;color:#8a7415;}
+  .band.normal .band-head{background:var(--green-soft);color:var(--green);}
+  .band-empty{padding:12px 0;color:var(--ink-soft);font-size:12.5px;font-style:italic;}
+  .fabrica-ref-ticket{background:#f7f9fc;}
+  .fabrica-ref-ticket .ticket-check{background:transparent;}
+  .fabrica-ref-ticket a.edit-btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center;}
   .time-badge{
     background:var(--purple-soft);
     color:var(--purple);
@@ -928,6 +940,11 @@
   <div id="finished-notify-wrap" style="display:none;margin-bottom:16px;">
     <button class="finished-badge" id="finished-badge-btn"></button>
     <div class="finished-panel" id="finished-panel"></div>
+  </div>
+
+  <div id="panorama-wrap" style="display:none;margin-bottom:22px;">
+    <div class="section-title st-green">🔭 Panorama — todo por urgencia</div>
+    <div id="panorama-bands"></div>
   </div>
 
   <div class="section-title st-rust">➕ Agregar tarea</div>
@@ -1799,6 +1816,7 @@ wireInlineCreateSelect('edit-ptask-sector', '__new_sector__', 'Nombre del nuevo 
   // este listener se dispara ahora con la primera carga, y de nuevo cada vez que
   // cambia algo (lo hagas vos u otra persona en otra pantalla).
   attachPersonalTasksListener();
+  attachFabricaPendientesListener();
   setStatus('listo — se guarda solo en este dispositivo');
 })();
 
@@ -2034,6 +2052,86 @@ document.getElementById('finished-badge-btn').addEventListener('click', ()=>{
   document.getElementById('finished-panel').classList.toggle('open');
 });
 
+/* ===== Panorama: todas las tareas pendientes agrupadas por urgencia, no por fecha/persona =====
+   Mezcla tus tareas y las de tus empleados (control_bynina) con los pendientes de producción
+   (fabrica_v5/pendientes_resumen, de solo lectura — ver nota en fabrica-PRUEBA.html). */
+const FABRICA_APP_URL = 'https://arielharari28-cloud.github.io/bynina-fabrica-v2/fabrica-PRUEBA.html';
+let fabricaPendientes = {};
+
+function attachFabricaPendientesListener(){
+  if(!isAdmin) return;
+  // Solo lectura: esta app nunca escribe en fabrica_v5, así que no hay riesgo de pisar nada allá.
+  db.ref('fabrica_v5/pendientes_resumen').on('value', snap=>{
+    fabricaPendientes = snap.val() || {};
+    renderPanorama();
+  }, err=>{ /* si no carga, el panorama sigue mostrando tus tareas igual */ });
+}
+
+// Misma idea que taskUrgency/urgencyBadgeHtml, pero devuelve la clave de la franja
+// (para agrupar), no el badge visual.
+function urgencyKeyOf(t){
+  if(taskRepeatType(t) !== 'none' || !t.dueDate) return 'normal';
+  const today = todayKey();
+  if(t.dueDate < today) return 'vencida';
+  if(t.dueDate === today) return 'hoy';
+  const diffDays = Math.round((new Date(t.dueDate+'T00:00:00') - new Date(today+'T00:00:00')) / 86400000);
+  if(diffDays <= 2) return 'pronto';
+  return 'normal';
+}
+
+function personalTasksPendingForPanorama(){
+  const todayStr = todayKey();
+  return (personalTasks||[]).filter(t=>{
+    if(taskRepeatType(t) !== 'none') return !isTaskDoneForDate(t, todayStr) || repeatingTaskPendingFromBefore(t, todayStr);
+    return !t.resolved;
+  });
+}
+
+function fabricaRowHtml(it){
+  const diasLabel = (it.dias!==null && it.dias!==undefined) ? `${it.dias} día${it.dias!==1?'s':''} en ${it.secTitle||'esta etapa'}` : (it.secTitle||'');
+  return `
+    <div class="ticket fabrica-ref-ticket">
+      <div class="ticket-check" style="opacity:.3;cursor:default;" title="Se resuelve desde la app de Fábrica">🏭</div>
+      <div class="ticket-body">
+        <div class="ticket-meta">
+          <span class="due-badge" style="background:#dde8f5;color:#2c5a8a">🏭 Fábrica</span>
+          <span class="due-badge ${it.atrasado?'overdue':''}">${it.atrasado?'⚠️ ':''}${escapeHtml(diasLabel)}</span>
+          ${it.responsable?`<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ ${escapeHtml(it.responsable)}</span>`:''}
+        </div>
+        <div class="ticket-text">${escapeHtml(it.code||'')}${it.name?' — '+escapeHtml(it.name):''}${it.accion?` · 👉 ${escapeHtml(it.accion)}`:''}</div>
+      </div>
+      <a class="edit-btn" href="${FABRICA_APP_URL}" target="_blank" rel="noopener" title="Ver y resolver en la app de Fábrica">↗</a>
+    </div>`;
+}
+
+const PANORAMA_BANDS = [
+  {key:'vencida', label:'🔴 Urgente / vencido'},
+  {key:'hoy', label:'🟠 Vence hoy'},
+  {key:'pronto', label:'🟡 Pronto (2 días)'},
+  {key:'normal', label:'🟢 Sin apuro'},
+];
+
+function renderPanorama(){
+  const wrap = document.getElementById('panorama-wrap');
+  if(!wrap) return;
+  if(!isAdmin){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+
+  const grouped = {vencida:[], hoy:[], pronto:[], normal:[]};
+  personalTasksPendingForPanorama().forEach(t=>{ grouped[urgencyKeyOf(t)].push({kind:'tarea', t}); });
+  Object.values(fabricaPendientes||{}).forEach(it=>{
+    grouped[it.atrasado ? 'vencida' : 'normal'].push({kind:'fabrica', it});
+  });
+
+  const el = document.getElementById('panorama-bands');
+  el.innerHTML = PANORAMA_BANDS.map(b=>{
+    const items = grouped[b.key];
+    const body = items.length ? items.map(x=> x.kind==='fabrica' ? fabricaRowHtml(x.it) : personalTaskHtml(x.t)).join('') : '<div class="band-empty">Nada acá 🎉</div>';
+    return `<div class="band ${b.key}"><div class="band-head"><span>${b.label}</span><span>${items.length}</span></div><div class="band-body">${body}</div></div>`;
+  }).join('');
+  wireTaskItemEvents(el);
+}
+
 let currentDate = new Date();
 let personalTasks = [];
 let taskFilter = 'todas';
@@ -2252,6 +2350,7 @@ function attachPersonalTasksListener(){
       renderMidiaPersonFilter();
       renderMidiaPersonTasks();
       renderFinishedBadge();
+      renderPanorama();
     }
   }, err=>{
     // Si se corta la conexión, Firebase reintenta solo; no hace falta un botón de reintentar.
@@ -2539,6 +2638,7 @@ async function reorderTicketGroup(container, draggedId, targetId){
 function renderAllTaskViews(){
   renderPersonalTasks();
   if(isAdmin) renderMidiaPersonTasks();
+  renderPanorama();
 }
 
 function renderPersonalTasks(){
