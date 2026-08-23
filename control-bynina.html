@@ -269,6 +269,28 @@
     border:none;cursor:pointer;font-family:inherit;
   }
   .pending-anterior-btn:hover{opacity:.75;}
+  .finished-badge{
+    display:inline-flex;align-items:center;gap:6px;
+    background:var(--red-soft);color:var(--red);
+    font-family:'Poppins',sans-serif;font-weight:700;font-size:12px;
+    padding:6px 14px;border-radius:14px;cursor:pointer;border:none;
+  }
+  .finished-badge:hover{opacity:.85;}
+  .finished-panel{
+    background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:4px 12px;margin-top:8px;display:none;
+  }
+  .finished-panel.open{display:block;}
+  .finished-item{
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+    padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;
+  }
+  .finished-item:last-child{border-bottom:none;}
+  .finished-item-dismiss{
+    border:none;background:var(--green-soft);color:var(--green);
+    border-radius:10px;padding:4px 10px;font-weight:700;cursor:pointer;font-size:12px;
+    flex-shrink:0;
+  }
   .time-badge{
     background:var(--purple-soft);
     color:var(--purple);
@@ -903,10 +925,16 @@
     <div class="datestamp" id="today"></div>
   </header>
 
+  <div id="finished-notify-wrap" style="display:none;margin-bottom:16px;">
+    <button class="finished-badge" id="finished-badge-btn"></button>
+    <div class="finished-panel" id="finished-panel"></div>
+  </div>
+
   <div class="section-title st-rust">➕ Agregar tarea</div>
   <div class="capture">
     <div class="capture-row">
       <select id="task-area"></select>
+      <select id="task-sector"></select>
       <select id="task-category"></select>
       <select id="task-person"></select>
       <input type="date" id="task-due-date">
@@ -946,6 +974,14 @@
       <div class="capture-row">
         <input type="text" id="new-area-input" placeholder="Nombre de la nueva área...">
         <button id="new-area-add-btn">Agregar</button>
+      </div>
+    </div>
+    <div class="settings-block">
+      <div class="capture-label">Sectores</div>
+      <div id="sector-settings-list"></div>
+      <div class="capture-row">
+        <input type="text" id="new-sector-input" placeholder="Nombre del nuevo sector...">
+        <button id="new-sector-add-btn">Agregar</button>
       </div>
     </div>
   </div>
@@ -991,6 +1027,10 @@
     <div class="modal-field">
       <label for="edit-ptask-area">Área</label>
       <select id="edit-ptask-area"></select>
+    </div>
+    <div class="modal-field">
+      <label for="edit-ptask-sector">Sector</label>
+      <select id="edit-ptask-sector"></select>
     </div>
     <div class="modal-field">
       <label for="edit-ptask-category">Tema</label>
@@ -1367,6 +1407,7 @@ function getTaskStatusForDate(t, dateStr){
   return t.status || (t.resolved ? 'finalizado' : 'pendiente');
 }
 function setTaskStatusForDate(t, dateStr, status){
+  const wasFinal = getTaskStatusForDate(t, dateStr) === 'finalizado';
   if(taskRepeatType(t) !== 'none'){
     if(!t.statusDates) t.statusDates = {};
     t.statusDates[dateStr] = status;
@@ -1375,6 +1416,15 @@ function setTaskStatusForDate(t, dateStr, status){
   } else {
     t.status = status;
     t.resolved = (status === 'finalizado');
+  }
+  // Aviso para vos: cuando un empleado (no admin) finaliza una tarea, queda marcada
+  // como "recién terminada" hasta que la veas en el aviso de arriba y la descartes.
+  if(!isAdmin && status === 'finalizado' && !wasFinal){
+    t.finishedUnseen = true;
+    t.finishedAt = Date.now();
+  }
+  if(status !== 'finalizado'){
+    t.finishedUnseen = false;
   }
 }
 function taskStatusSelectHtml(t, dateStr){
@@ -1712,6 +1762,8 @@ wireInlineCreateSelect('task-category', '__new_category__', 'Nombre del nuevo te
 wireInlineCreateSelect('edit-ptask-category', '__new_category__', 'Nombre del nuevo tema:', addCustomCategory, 'otro');
 wireInlineCreateSelect('task-person', '__new_person__', 'Nombre de la nueva persona:', addCustomPerson, viewerPerson);
 wireInlineCreateSelect('edit-ptask-person', '__new_person__', 'Nombre de la nueva persona:', addCustomPerson, '');
+wireInlineCreateSelect('task-sector', '__new_sector__', 'Nombre del nuevo sector:', addCustomSector, '');
+wireInlineCreateSelect('edit-ptask-sector', '__new_sector__', 'Nombre del nuevo sector:', addCustomSector, '');
 
 (async function init(){
   renderToday();
@@ -1723,10 +1775,12 @@ wireInlineCreateSelect('edit-ptask-person', '__new_person__', 'Nombre de la nuev
   }
   await peopleAndCategoryConfigReady;
   await loadAreaConfig();
+  await loadSectorConfig();
   await migrateTeamTasksIfNeeded();
   await dedupePersonalTasksIfNeeded();
   await migrateToTasksV2IfNeeded();
   document.getElementById('task-area').innerHTML = areaSelectOptionsHtml('nina');
+  document.getElementById('task-sector').innerHTML = sectorSelectOptionsHtml('');
   document.getElementById('task-category').innerHTML = categorySelectOptionsHtml('otro');
   document.getElementById('task-repeat').innerHTML = repeatSelectOptionsHtml('none');
   renderTaskRepeatDaysPicker();
@@ -1833,6 +1887,152 @@ function renderAreaSettingsList(){
     });
   });
 }
+
+/* ===== Sector (Fábrica / Logística / Diseño / etc — de dónde viene el pedido) ===== */
+const BASE_SECTORS = {
+  fabrica:'Fábrica', logistica:'Logística', diseno:'Diseño',
+  administracion:'Administración', ventas:'Ventas', deposito:'Depósito'
+};
+let customSectors = {};
+let hiddenSectorKeys = [];
+let SECTORS = {};
+function rebuildSectorLists(){
+  SECTORS = {...BASE_SECTORS, ...customSectors};
+}
+rebuildSectorLists();
+
+const SECTOR_CONFIG_KEY = 'control_bynina/sector_config';
+async function loadSectorConfig(){
+  try{
+    const val = await fbGet(SECTOR_CONFIG_KEY);
+    if(val){
+      const parsed = JSON.parse(val);
+      customSectors = parsed.customSectors || {};
+      hiddenSectorKeys = parsed.hiddenSectorKeys || [];
+    }
+  }catch(e){}
+  rebuildSectorLists();
+}
+async function saveSectorConfig(){
+  try{
+    await fbSet(SECTOR_CONFIG_KEY, JSON.stringify({customSectors, hiddenSectorKeys}));
+  }catch(e){}
+}
+async function addCustomSector(name){
+  const label = name.trim();
+  if(!label) return null;
+  const key = slugifyKey(label, Object.keys(SECTORS));
+  customSectors[key] = label;
+  rebuildSectorLists();
+  await saveSectorConfig();
+  refreshAllSectorSelects();
+  return key;
+}
+async function removeSector(key){
+  if(customSectors[key]){
+    delete customSectors[key];
+  } else {
+    if(!hiddenSectorKeys.includes(key)) hiddenSectorKeys.push(key);
+  }
+  rebuildSectorLists();
+  await saveSectorConfig();
+  refreshAllSectorSelects();
+}
+function visibleSectorEntries(){
+  return Object.entries(SECTORS).filter(([k])=>!hiddenSectorKeys.includes(k));
+}
+function sectorSelectOptionsHtml(selected){
+  return `<option value="">Sin sector</option>` + visibleSectorEntries().map(([k,v])=>
+    `<option value="${k}" ${k===selected?'selected':''}>${v}</option>`
+  ).join('') + (isAdmin ? `<option value="__new_sector__">+ Nuevo sector...</option>` : '');
+}
+function refreshAllSectorSelects(){
+  const taskSectorSel = document.getElementById('task-sector');
+  if(taskSectorSel){
+    const prev = taskSectorSel.value;
+    taskSectorSel.innerHTML = sectorSelectOptionsHtml(prev);
+  }
+  renderSectorSettingsList();
+}
+function renderSectorSettingsList(){
+  const el = document.getElementById('sector-settings-list');
+  if(!el) return;
+  const entries = visibleSectorEntries();
+  el.innerHTML = entries.length ? entries.map(([k,v])=>`
+    <div class="settings-item">
+      <span>${escapeHtml(v)}</span>
+      <button class="settings-item-del" data-key="${k}" title="Quitar de las listas">×</button>
+    </div>
+  `).join('') : '<div class="empty">No hay sectores cargados.</div>';
+  el.querySelectorAll('.settings-item-del').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm(`¿Quitar el sector "${SECTORS[btn.dataset.key]}" de las listas para elegir? Las tareas viejas con este sector van a seguir mostrándolo.`)) return;
+      await removeSector(btn.dataset.key);
+    });
+  });
+}
+function sectorTagHtml(t){
+  if(!t.sector) return '';
+  const label = SECTORS[t.sector] || t.sector;
+  return `<span class="due-badge" style="background:#dde8f5;color:#2c5a8a">🏭 ${escapeHtml(label)}</span>`;
+}
+
+/* ===== Urgencia automática según fecha límite (para decidir qué elegir primero) ===== */
+function taskUrgency(t){
+  if(!t.dueDate) return {label:'Sin fecha', bg:'#ece9e2', color:'#8a8375'};
+  const today = todayKey();
+  if(t.dueDate < today) return {label:'🔴 Urgente · vencida', bg:'#f2ded9', color:'#7a3230'};
+  if(t.dueDate === today) return {label:'🟠 Urgente · hoy', bg:'#fbe3cf', color:'#9a5a1a'};
+  const diffDays = Math.round((new Date(t.dueDate+'T00:00:00') - new Date(today+'T00:00:00')) / 86400000);
+  if(diffDays <= 2) return {label:'🟡 Pronto', bg:'#faf1c8', color:'#8a7415'};
+  return {label:'🟢 Normal', bg:'#dcece2', color:'#2f6b4f'};
+}
+function urgencyBadgeHtml(t){
+  if(taskRepeatType(t) !== 'none') return '';
+  const u = taskUrgency(t);
+  return `<span class="due-badge" style="background:${u.bg};color:${u.color}">${u.label}</span>`;
+}
+
+/* ===== Aviso de tareas que un empleado marcó Finalizado y vos todavía no viste ===== */
+function renderFinishedBadge(){
+  const wrap = document.getElementById('finished-notify-wrap');
+  if(!wrap) return;
+  if(!isAdmin){ wrap.style.display = 'none'; return; }
+  const finished = (personalTasks||[]).filter(t=>t.finishedUnseen);
+  const btn = document.getElementById('finished-badge-btn');
+  const panel = document.getElementById('finished-panel');
+  if(!finished.length){
+    wrap.style.display = 'none';
+    panel.classList.remove('open');
+    panel.innerHTML = '';
+    return;
+  }
+  wrap.style.display = 'block';
+  btn.textContent = `✅ ${finished.length} tarea${finished.length>1?'s':''} recién terminada${finished.length>1?'s':''} — tocá para ver`;
+  panel.innerHTML = finished.slice().sort((a,b)=>(b.finishedAt||0)-(a.finishedAt||0)).map(t=>{
+    const person = PEOPLE[t.assignedPerson] || t.assignedPerson || '';
+    const sector = t.sector ? (SECTORS[t.sector]||t.sector) : '';
+    return `
+      <div class="finished-item">
+        <span>${sector?`<b>${escapeHtml(sector)}</b> — `:''}${escapeHtml(person)}: ${escapeHtml(t.text)}</span>
+        <button class="finished-item-dismiss" data-id="${t.id}">✓ Visto</button>
+      </div>
+    `;
+  }).join('');
+  panel.querySelectorAll('.finished-item-dismiss').forEach(b=>{
+    b.addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      const t = personalTasks.find(x=>x.id===b.dataset.id);
+      if(!t) return;
+      t.finishedUnseen = false;
+      renderFinishedBadge();
+      await saveOneTask(t);
+    });
+  });
+}
+document.getElementById('finished-badge-btn').addEventListener('click', ()=>{
+  document.getElementById('finished-panel').classList.toggle('open');
+});
 
 let currentDate = new Date();
 let personalTasks = [];
@@ -2051,6 +2251,7 @@ function attachPersonalTasksListener(){
     if(isAdmin){
       renderMidiaPersonFilter();
       renderMidiaPersonTasks();
+      renderFinishedBadge();
     }
   }, err=>{
     // Si se corta la conexión, Firebase reintenta solo; no hace falta un botón de reintentar.
@@ -2116,9 +2317,11 @@ function personalTaskHtml(t){
       <div class="ticket-body">
         <div class="ticket-meta">
           <span class="tag ${t.area}">${AREAS[t.area] || t.area}</span>
+          ${sectorTagHtml(t)}
           ${categoryTagHtml(t)}
           ${responsableLabel}
           ${timeLabel}
+          ${!done ? urgencyBadgeHtml(t) : ''}
           ${dueLabel}
           ${statusSelectHtml}
         </div>
@@ -2381,6 +2584,7 @@ function renderPersonalTasks(){
 async function addPersonalTask(){
   const textEl = document.getElementById('task-text-input');
   const areaEl = document.getElementById('task-area');
+  const sectorEl = document.getElementById('task-sector');
   const categoryEl = document.getElementById('task-category');
   const personEl = document.getElementById('task-person');
   const dueEl = document.getElementById('task-due-date');
@@ -2401,6 +2605,7 @@ async function addPersonalTask(){
   const newTask = {
     id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
     area: areaEl.value,
+    sector: sectorEl.value || '',
     category: categoryEl.value || 'otro',
     assignedPerson: personEl.value,
     text: text,
@@ -2440,6 +2645,9 @@ function openEditPersonalTask(id){
   const areaStillVisible = visibleAreaEntries().some(([k])=>k===t.area);
   document.getElementById('edit-ptask-area').innerHTML = areaSelectOptionsHtml(t.area) +
     (areaStillVisible ? '' : `<option value="${t.area}" selected>${AREAS[t.area]||t.area}</option>`);
+  const sectorStillVisible = !t.sector || visibleSectorEntries().some(([k])=>k===t.sector);
+  document.getElementById('edit-ptask-sector').innerHTML = sectorSelectOptionsHtml(t.sector || '') +
+    (sectorStillVisible ? '' : `<option value="${t.sector}" selected>${SECTORS[t.sector]||t.sector}</option>`);
   document.getElementById('edit-ptask-category').innerHTML = categorySelectOptionsHtml(t.category || 'otro');
   document.getElementById('edit-ptask-due').value = t.dueDate || '';
   document.getElementById('edit-ptask-time').value = t.time || '';
@@ -2486,6 +2694,7 @@ async function saveEditPersonalTask(){
   if(!newText) return;
   t.text = newText;
   t.area = document.getElementById('edit-ptask-area').value;
+  t.sector = document.getElementById('edit-ptask-sector').value || '';
   t.category = document.getElementById('edit-ptask-category').value || 'otro';
   t.dueDate = document.getElementById('edit-ptask-due').value || '';
   t.time = document.getElementById('edit-ptask-time').value || '';
@@ -2528,6 +2737,7 @@ let dragSummaryNoDateId = null;
 function renderDaySummary(){
   renderDatedSummary();
   renderNoDateSummary();
+  renderFinishedBadge();
 }
 
 // Tareas del viewer que aplican al día que se está mirando (hoy o el navegado), sin contar
@@ -2587,8 +2797,10 @@ function renderDatedSummary(){
       <div class="summary-check" data-id="${t.id}"></div>
       <span class="summary-time">${t.time}</span>
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
+      ${sectorTagHtml(t)}
       ${responsableLabel}
       ${repeatTagHtml(t)}
+      ${urgencyBadgeHtml(t)}
       ${overdueLabel(t)}
       ${statusSelectHtml(t)}
       ${postponeBtn}
@@ -2696,8 +2908,10 @@ function renderNoDateSummary(){
     <div class="summary-row draggable-nodate-row ${responsableName?'summary-row-shared':''}" draggable="true" data-id="${t.id}">
       <div class="summary-check" data-id="${t.id}"></div>
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
+      ${sectorTagHtml(t)}
       ${responsableLabel}
       ${repeatTagHtml(t)}
+      ${urgencyBadgeHtml(t)}
       ${overdueLabel(t)}
       ${statusSelectHtml(t)}
       ${postponeBtn}
