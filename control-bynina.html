@@ -437,7 +437,7 @@
   .modal-box{
     background:var(--card);
     border-radius:12px;
-    padding:18px;
+    padding:16px;
     width:100%;
     max-width:420px;
     max-height:90vh;
@@ -446,30 +446,34 @@
   .modal-title{
     font-family:'Poppins',sans-serif;
     font-weight:600;
-    font-size:15px;
-    margin-bottom:14px;
+    font-size:14px;
+    margin-bottom:10px;
   }
-  .modal-field{margin-bottom:12px;}
+  .modal-row{display:flex;gap:8px;}
+  .modal-row .modal-field{flex:1 1 0;min-width:0;}
+  .modal-field{margin-bottom:8px;}
   .modal-field label{
     display:block;
     font-family:'Poppins',sans-serif;
-    font-size:12px;
+    font-size:10.5px;
     font-weight:600;
     color:var(--ink-soft);
-    margin-bottom:5px;
+    margin-bottom:2px;
   }
   .modal-field select, .modal-field input, .modal-field textarea{
     width:100%;
     min-height:auto;
+    padding:6px 8px;
+    font-size:13px;
   }
-  .modal-field textarea{min-height:70px;}
+  .modal-field textarea{min-height:44px;}
   .modal-footer{
     display:flex;
     justify-content:flex-end;
     gap:8px;
-    margin-top:6px;
+    margin-top:4px;
   }
-  .modal-footer button{padding:0 16px;height:34px;}
+  .modal-footer button{padding:0 16px;height:32px;}
   .modal-cancel-btn{
     background:none;
     color:var(--ink-soft);
@@ -1099,43 +1103,51 @@
 <div class="modal-overlay" id="edit-ptask-modal">
   <div class="modal-box">
     <div class="modal-title">Editar tarea</div>
-    <div class="modal-field">
-      <label for="edit-ptask-area">Área</label>
-      <select id="edit-ptask-area"></select>
+    <div class="modal-row">
+      <div class="modal-field">
+        <label for="edit-ptask-area">Área</label>
+        <select id="edit-ptask-area"></select>
+      </div>
+      <div class="modal-field">
+        <label for="edit-ptask-sector">Sector</label>
+        <select id="edit-ptask-sector"></select>
+      </div>
     </div>
-    <div class="modal-field">
-      <label for="edit-ptask-sector">Sector</label>
-      <select id="edit-ptask-sector"></select>
+    <div class="modal-row">
+      <div class="modal-field">
+        <label for="edit-ptask-category">Tema</label>
+        <select id="edit-ptask-category"></select>
+      </div>
+      <div class="modal-field" id="edit-ptask-person-field">
+        <label for="edit-ptask-person">Responsable</label>
+        <select id="edit-ptask-person"></select>
+      </div>
     </div>
-    <div class="modal-field">
-      <label for="edit-ptask-category">Tema</label>
-      <select id="edit-ptask-category"></select>
-    </div>
-    <div class="modal-field">
-      <label for="edit-ptask-due">Vence</label>
-      <input type="date" id="edit-ptask-due">
-    </div>
-    <div class="modal-field">
-      <label for="edit-ptask-time">Horario</label>
-      <input type="time" id="edit-ptask-time">
+    <div class="modal-row">
+      <div class="modal-field">
+        <label for="edit-ptask-due">Vence</label>
+        <input type="date" id="edit-ptask-due">
+      </div>
+      <div class="modal-field">
+        <label for="edit-ptask-time">Horario</label>
+        <input type="time" id="edit-ptask-time">
+      </div>
     </div>
     <div class="modal-field">
       <label for="edit-ptask-text">Tarea</label>
       <textarea id="edit-ptask-text"></textarea>
     </div>
-    <div class="modal-field">
-      <label for="edit-ptask-status">Estado</label>
-      <select id="edit-ptask-status"></select>
+    <div class="modal-row">
+      <div class="modal-field">
+        <label for="edit-ptask-status">Estado</label>
+        <select id="edit-ptask-status"></select>
+      </div>
+      <div class="modal-field">
+        <label for="edit-ptask-repeat">Repetición</label>
+        <select id="edit-ptask-repeat"></select>
+      </div>
     </div>
-    <div class="modal-field" id="edit-ptask-person-field">
-      <label for="edit-ptask-person">Responsable</label>
-      <select id="edit-ptask-person"></select>
-    </div>
-    <div class="modal-field">
-      <label for="edit-ptask-repeat">Repetición</label>
-      <select id="edit-ptask-repeat"></select>
-      <div class="weekday-picker" id="edit-ptask-repeat-days" style="display:none;"></div>
-    </div>
+    <div class="weekday-picker" id="edit-ptask-repeat-days" style="display:none;"></div>
     <div class="modal-footer">
       <button class="modal-cancel-btn" id="edit-ptask-cancel">Cancelar</button>
       <button id="edit-ptask-save">Guardar</button>
