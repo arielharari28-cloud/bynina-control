@@ -313,6 +313,12 @@
     background:#fff;color:var(--ink-soft);cursor:pointer;
   }
   .person-chip.active{background:var(--purple);color:#fff;border-color:var(--purple);}
+  .sector-chip{
+    font-family:'Poppins',sans-serif;font-weight:600;font-size:11.5px;
+    padding:5px 12px;border-radius:14px;border:1px solid var(--line);
+    background:#fff;color:var(--ink-soft);cursor:pointer;
+  }
+  .sector-chip.active{color:#fff;}
   .board{display:flex;gap:10px;overflow-x:auto;padding-bottom:10px;margin:0 -16px;padding-left:16px;padding-right:16px;}
   .plist{
     flex:1 1 190px;min-width:160px;max-width:280px;background:#e5e2d6;border-radius:12px;padding:10px;
@@ -993,12 +999,16 @@
   </div>
 
   <div id="panorama-wrap" style="display:none;margin-bottom:22px;">
-    <div class="section-title st-green">🔭 Panorama</div>
+    <div class="section-title st-green" style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <span>🔭 Panorama</span>
+      <button id="panorama-quick-add-btn" style="background:#fff;color:var(--green);padding:0 14px;height:28px;font-size:12px;">➕ Nueva tarea</button>
+    </div>
     <div class="view-tabs" id="panorama-view-tabs">
       <button class="view-tab active" data-view="urgencia">Por urgencia</button>
       <button class="view-tab" data-view="responsable">Por responsable</button>
     </div>
     <div class="board-filter" id="panorama-people-filter"></div>
+    <div class="board-filter" id="panorama-sector-filter"></div>
     <div class="board" id="panorama-board"></div>
   </div>
 
@@ -2365,15 +2375,69 @@ function renderPanoramaPeopleFilter(){
   });
 }
 
+// Filtro de sector: mismo patrón que el de personas. Los pendientes de fábrica no
+// tienen un campo "sector" propio (vienen de otra app), así que los tratamos como
+// sector "fabrica" implícito — así el chip Fábrica los incluye/excluye también.
+let panoramaSelectedSectors = null;
+
+function panoramaSectorIncluded(sectorKey){
+  if(!panoramaSelectedSectors) return true;
+  return panoramaSelectedSectors.has(sectorKey || '__sinsector__');
+}
+function panoramaFabricaSectorIncluded(){
+  if(!panoramaSelectedSectors) return true;
+  return panoramaSelectedSectors.has('fabrica');
+}
+// Único sector seleccionado (o null si es "Todos" o hay varios) — se usa para
+// precargar el sector al crear una tarjeta nueva desde un tablero ya filtrado.
+function panoramaSingleSelectedSector(){
+  if(!panoramaSelectedSectors || panoramaSelectedSectors.size !== 1) return '';
+  const only = [...panoramaSelectedSectors][0];
+  return only === '__sinsector__' || only === 'fabrica' ? '' : only;
+}
+
+function togglePanoramaSector(key){
+  if(key === '__all__'){
+    panoramaSelectedSectors = null;
+  } else {
+    if(!panoramaSelectedSectors) panoramaSelectedSectors = new Set();
+    if(panoramaSelectedSectors.has(key)) panoramaSelectedSectors.delete(key);
+    else panoramaSelectedSectors.add(key);
+    if(panoramaSelectedSectors.size === 0) panoramaSelectedSectors = null;
+  }
+  renderPanoramaSectorFilter();
+  renderPanorama();
+}
+
+function renderPanoramaSectorFilter(){
+  const el = document.getElementById('panorama-sector-filter');
+  if(!el) return;
+  const entries = visibleSectorEntries(); // [[key,label],...]
+  const allActive = !panoramaSelectedSectors;
+  const chipHtml = (key, label, color) => {
+    const active = !allActive && panoramaSelectedSectors.has(key);
+    return `<button class="sector-chip ${active?'active':''}" data-key="${key}" style="${active?`background:${color};border-color:${color};`:''}">${escapeHtml(label)}</button>`;
+  };
+  el.innerHTML = `<button class="person-chip ${allActive?'active':''}" data-key="__all__">Todos</button>` +
+    chipHtml('fabrica', '🏭 Fábrica', '#2c5a8a') +
+    entries.map(([k,v])=>chipHtml(k, v, initialsColorFor(v))).join('') +
+    chipHtml('__sinsector__', 'Sin sector', '#8a8375');
+  el.querySelectorAll('.sector-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>togglePanoramaSector(chip.dataset.key));
+  });
+}
+
 function renderPanorama(){
   const wrap = document.getElementById('panorama-wrap');
   if(!wrap) return;
   wrap.style.display = 'block';
   const tabsEl = document.getElementById('panorama-view-tabs');
   const filterEl = document.getElementById('panorama-people-filter');
+  renderPanoramaSectorFilter();
   if(!isAdmin){
     // Tablero simple para empleados: solo sus propias tarjetas, sin pestañas
-    // ni filtro de personas (no tendría sentido con una sola persona).
+    // ni filtro de personas (no tendría sentido con una sola persona). El filtro
+    // de sector sí les sirve, así que ese queda.
     tabsEl.style.display = 'none';
     filterEl.style.display = 'none';
     renderPanoramaByUrgencia();
@@ -2390,10 +2454,10 @@ function renderPanoramaByUrgencia(){
   const board = document.getElementById('panorama-board');
   const grouped = {vencida:[], hoy:[], pronto:[], normal:[]};
   personalTasksPendingForPanorama()
-    .filter(t=>isAdmin ? panoramaPersonIncluded(t.assignedPerson) : true)
+    .filter(t=>(isAdmin ? panoramaPersonIncluded(t.assignedPerson) : true) && panoramaSectorIncluded(t.sector))
     .forEach(t=>{ grouped[urgencyKeyOf(t)].push({kind:'tarea', t}); });
   Object.values(fabricaPendientes||{})
-    .filter(it=> isAdmin ? (!panoramaSelectedPeople || panoramaFabricaIncluded(it)) : (it.personKeys||[]).includes(viewerPerson))
+    .filter(it=> (isAdmin ? (!panoramaSelectedPeople || panoramaFabricaIncluded(it)) : (it.personKeys||[]).includes(viewerPerson)) && panoramaFabricaSectorIncluded())
     .forEach(it=>{
       grouped[it.atrasado ? 'vencida' : 'normal'].push({kind:'fabrica', it});
     });
@@ -2424,18 +2488,21 @@ function renderPanoramaByResponsable(){
     grouped[key].items.push(entry);
   };
   personalTasksPendingForPanorama().forEach(t=>{
+    if(!panoramaSectorIncluded(t.sector)) return;
     const key = t.assignedPerson || '__sinresp__';
     const label = PEOPLE[t.assignedPerson] || 'Sin responsable';
     addTo(key, label, {kind:'tarea', t, urg:urgencyKeyOf(t)});
   });
-  Object.values(fabricaPendientes||{}).forEach(it=>{
-    const urg = it.atrasado ? 'vencida' : 'normal';
-    if(it.personKeys && it.personKeys.length){
-      it.personKeys.forEach(pk=> addTo(pk, PEOPLE[pk] || pk, {kind:'fabrica', it, urg}));
-    } else if(!panoramaSelectedPeople){
-      addTo('__fab_'+(it.responsable||'?'), it.responsable || 'Fábrica (sin asignar)', {kind:'fabrica', it, urg});
-    }
-  });
+  if(panoramaFabricaSectorIncluded()){
+    Object.values(fabricaPendientes||{}).forEach(it=>{
+      const urg = it.atrasado ? 'vencida' : 'normal';
+      if(it.personKeys && it.personKeys.length){
+        it.personKeys.forEach(pk=> addTo(pk, PEOPLE[pk] || pk, {kind:'fabrica', it, urg}));
+      } else if(!panoramaSelectedPeople){
+        addTo('__fab_'+(it.responsable||'?'), it.responsable || 'Fábrica (sin asignar)', {kind:'fabrica', it, urg});
+      }
+    });
+  }
 
   const urgRank = {vencida:0, hoy:1, pronto:2, normal:3};
   const keys = Object.keys(grouped).sort((a,b)=>{
@@ -2478,7 +2545,7 @@ function wirePanoramaCardEvents(board){
   });
   board.querySelectorAll('.padd-card').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      openQuickAddModal(btn.dataset.presetPerson || null);
+      openQuickAddModal(btn.dataset.presetPerson || null, panoramaSingleSelectedSector());
     });
   });
 }
@@ -2486,10 +2553,11 @@ function wirePanoramaCardEvents(board){
 // Modal de "➕ Nueva tarjeta": alta rápida de tareas que no depende del formulario
 // largo (que ahora queda escondido para vos detrás de "⚙️ Más"). Arma la tarea con
 // los mismos campos mínimos que addPersonalTask(), sin tema/horario/repetición —
-// eso se puede completar después abriendo la tarjeta si hace falta.
-function openQuickAddModal(presetPerson){
+// eso se puede completar después abriendo la tarjeta si hace falta. Si el tablero
+// ya está filtrado a un solo sector, la tarjeta nueva lo hereda directo.
+function openQuickAddModal(presetPerson, presetSector){
   document.getElementById('qa-area').innerHTML = areaSelectOptionsHtml('nina');
-  document.getElementById('qa-sector').innerHTML = sectorSelectOptionsHtml('');
+  document.getElementById('qa-sector').innerHTML = sectorSelectOptionsHtml(presetSector || '');
   document.getElementById('qa-person').innerHTML = Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('');
   document.getElementById('qa-person').value = presetPerson || viewerPerson;
   document.getElementById('qa-person').disabled = !isAdmin;
@@ -2530,8 +2598,18 @@ document.getElementById('qa-save').addEventListener('click', saveQuickAdd);
 document.getElementById('quick-add-modal').addEventListener('click', (e)=>{
   if(e.target.id === 'quick-add-modal') closeQuickAddModal();
 });
+// Ctrl/Cmd+Enter en el textarea guarda directo, sin tener que ir a buscar el botón.
+document.getElementById('qa-text').addEventListener('keydown', (e)=>{
+  if((e.key === 'Enter') && (e.ctrlKey || e.metaKey)){
+    e.preventDefault();
+    saveQuickAdd();
+  }
+});
 wireInlineCreateSelect('qa-area', '__new_area__', 'Nombre de la nueva área:', addCustomArea, 'nina');
 wireInlineCreateSelect('qa-sector', '__new_sector__', 'Nombre del nuevo sector:', addCustomSector, '');
+document.getElementById('panorama-quick-add-btn').addEventListener('click', ()=>{
+  openQuickAddModal(null, panoramaSingleSelectedSector());
+});
 
 document.getElementById('legacy-toggle-btn').addEventListener('click', ()=>{
   const sec = document.getElementById('legacy-section');
