@@ -1002,6 +1002,11 @@
     <div class="board" id="panorama-board"></div>
   </div>
 
+  <div id="legacy-toggle-wrap" style="display:none;margin-bottom:16px;">
+    <button class="finished-badge" id="legacy-toggle-btn" style="background:#eceada;color:var(--ink-soft);">⚙️ Más — agregar con todos los campos, personas, sectores, limpieza</button>
+  </div>
+
+  <div id="legacy-section">
   <div class="section-title st-rust">➕ Agregar tarea</div>
   <div class="capture">
     <div class="capture-row">
@@ -1103,8 +1108,43 @@
   <div class="section-title st-rust">Mis tareas</div>
   <div class="filters" id="task-filters"></div>
   <div id="task-list"><div class="empty">Cargando...</div></div>
+  </div>
 
   <div class="status-bar" id="status-bar">cargando...</div>
+</div>
+
+<div class="modal-overlay" id="quick-add-modal">
+  <div class="modal-box">
+    <div class="modal-title">➕ Nueva tarjeta</div>
+    <div class="modal-row">
+      <div class="modal-field">
+        <label for="qa-area">Área</label>
+        <select id="qa-area"></select>
+      </div>
+      <div class="modal-field">
+        <label for="qa-sector">Sector</label>
+        <select id="qa-sector"></select>
+      </div>
+    </div>
+    <div class="modal-row">
+      <div class="modal-field">
+        <label for="qa-person">Responsable</label>
+        <select id="qa-person"></select>
+      </div>
+      <div class="modal-field">
+        <label for="qa-due">Vence</label>
+        <input type="date" id="qa-due">
+      </div>
+    </div>
+    <div class="modal-field">
+      <label for="qa-text">Tarea</label>
+      <textarea id="qa-text" placeholder="Qué hay que hacer..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-cancel-btn" id="qa-cancel">Cancelar</button>
+      <button id="qa-save">Agregar</button>
+    </div>
+  </div>
 </div>
 
 
@@ -1922,6 +1962,15 @@ wireInlineCreateSelect('edit-ptask-sector', '__new_sector__', 'Nombre del nuevo 
     document.getElementById('admin-only-midia-person').style.display = 'none';
     document.getElementById('app-title').textContent = `By Nina — Hola, ${PEOPLE[employeePersona] || employeePersona}`;
   }
+  // Ahora que existe el tablero (Panorama para vos, versión simple para el equipo),
+  // el formulario largo/personas/limpieza queda escondido por default para todos —
+  // se puede abrir con "⚙️ Más" cuando haga falta algo que el tablero no cubre
+  // (por ejemplo poner una repetición semanal a mano).
+  document.getElementById('legacy-section').style.display = 'none';
+  document.getElementById('legacy-toggle-wrap').style.display = 'block';
+  document.getElementById('legacy-toggle-btn').textContent = isAdmin
+    ? '⚙️ Más — agregar con todos los campos, personas, sectores, limpieza'
+    : '⚙️ Más — agregar con todos los campos, ver resumen del día';
   await peopleAndCategoryConfigReady;
   await loadAreaConfig();
   await loadSectorConfig();
@@ -2191,8 +2240,8 @@ const FABRICA_APP_URL = 'https://arielharari28-cloud.github.io/bynina-fabrica-v2
 let fabricaPendientes = {};
 
 function attachFabricaPendientesListener(){
-  if(!isAdmin) return;
   // Solo lectura: esta app nunca escribe en fabrica_v5, así que no hay riesgo de pisar nada allá.
+  // También corre para empleados: su tablero simple mezcla sus propios pendientes de fábrica.
   db.ref('fabrica_v5/pendientes_resumen').on('value', snap=>{
     fabricaPendientes = snap.val() || {};
     renderPanorama();
@@ -2214,6 +2263,7 @@ function urgencyKeyOf(t){
 function personalTasksPendingForPanorama(){
   const todayStr = todayKey();
   return (personalTasks||[]).filter(t=>{
+    if(!isAdmin && t.assignedPerson !== viewerPerson) return false;
     if(taskRepeatType(t) !== 'none') return !isTaskDoneForDate(t, todayStr);
     return !t.resolved;
   });
@@ -2318,8 +2368,19 @@ function renderPanoramaPeopleFilter(){
 function renderPanorama(){
   const wrap = document.getElementById('panorama-wrap');
   if(!wrap) return;
-  if(!isAdmin){ wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
+  const tabsEl = document.getElementById('panorama-view-tabs');
+  const filterEl = document.getElementById('panorama-people-filter');
+  if(!isAdmin){
+    // Tablero simple para empleados: solo sus propias tarjetas, sin pestañas
+    // ni filtro de personas (no tendría sentido con una sola persona).
+    tabsEl.style.display = 'none';
+    filterEl.style.display = 'none';
+    renderPanoramaByUrgencia();
+    return;
+  }
+  tabsEl.style.display = '';
+  filterEl.style.display = '';
   renderPanoramaPeopleFilter();
   if(panoramaView === 'responsable') renderPanoramaByResponsable();
   else renderPanoramaByUrgencia();
@@ -2329,10 +2390,10 @@ function renderPanoramaByUrgencia(){
   const board = document.getElementById('panorama-board');
   const grouped = {vencida:[], hoy:[], pronto:[], normal:[]};
   personalTasksPendingForPanorama()
-    .filter(t=>panoramaPersonIncluded(t.assignedPerson))
+    .filter(t=>isAdmin ? panoramaPersonIncluded(t.assignedPerson) : true)
     .forEach(t=>{ grouped[urgencyKeyOf(t)].push({kind:'tarea', t}); });
   Object.values(fabricaPendientes||{})
-    .filter(it=>!panoramaSelectedPeople || panoramaFabricaIncluded(it))
+    .filter(it=> isAdmin ? (!panoramaSelectedPeople || panoramaFabricaIncluded(it)) : (it.personKeys||[]).includes(viewerPerson))
     .forEach(it=>{
       grouped[it.atrasado ? 'vencida' : 'normal'].push({kind:'fabrica', it});
     });
@@ -2417,13 +2478,65 @@ function wirePanoramaCardEvents(board){
   });
   board.querySelectorAll('.padd-card').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      const presetPerson = btn.dataset.presetPerson;
-      if(presetPerson) document.getElementById('task-person').value = presetPerson;
-      document.getElementById('task-text-input').scrollIntoView({behavior:'smooth', block:'center'});
-      document.getElementById('task-text-input').focus();
+      openQuickAddModal(btn.dataset.presetPerson || null);
     });
   });
 }
+
+// Modal de "➕ Nueva tarjeta": alta rápida de tareas que no depende del formulario
+// largo (que ahora queda escondido para vos detrás de "⚙️ Más"). Arma la tarea con
+// los mismos campos mínimos que addPersonalTask(), sin tema/horario/repetición —
+// eso se puede completar después abriendo la tarjeta si hace falta.
+function openQuickAddModal(presetPerson){
+  document.getElementById('qa-area').innerHTML = areaSelectOptionsHtml('nina');
+  document.getElementById('qa-sector').innerHTML = sectorSelectOptionsHtml('');
+  document.getElementById('qa-person').innerHTML = Object.keys(ACTIVE_PEOPLE).map(k=>`<option value="${k}">${PEOPLE[k]}</option>`).join('');
+  document.getElementById('qa-person').value = presetPerson || viewerPerson;
+  document.getElementById('qa-person').disabled = !isAdmin;
+  document.getElementById('qa-due').value = '';
+  document.getElementById('qa-text').value = '';
+  document.getElementById('quick-add-modal').classList.add('open');
+  document.getElementById('qa-text').focus();
+}
+function closeQuickAddModal(){
+  document.getElementById('quick-add-modal').classList.remove('open');
+}
+async function saveQuickAdd(){
+  const text = document.getElementById('qa-text').value.trim();
+  if(!text) return;
+  const btn = document.getElementById('qa-save');
+  btn.disabled = true;
+  const newTask = {
+    id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
+    area: document.getElementById('qa-area').value,
+    sector: document.getElementById('qa-sector').value || '',
+    category: 'otro',
+    assignedPerson: document.getElementById('qa-person').value,
+    text: text,
+    dueDate: document.getElementById('qa-due').value || '',
+    time: '',
+    ts: Date.now(),
+    resolved: false,
+    repeat: 'none'
+  };
+  personalTasks.push(newTask);
+  closeQuickAddModal();
+  renderAllTaskViews();
+  await saveOneTask(newTask);
+  btn.disabled = false;
+}
+document.getElementById('qa-cancel').addEventListener('click', closeQuickAddModal);
+document.getElementById('qa-save').addEventListener('click', saveQuickAdd);
+document.getElementById('quick-add-modal').addEventListener('click', (e)=>{
+  if(e.target.id === 'quick-add-modal') closeQuickAddModal();
+});
+wireInlineCreateSelect('qa-area', '__new_area__', 'Nombre de la nueva área:', addCustomArea, 'nina');
+wireInlineCreateSelect('qa-sector', '__new_sector__', 'Nombre del nuevo sector:', addCustomSector, '');
+
+document.getElementById('legacy-toggle-btn').addEventListener('click', ()=>{
+  const sec = document.getElementById('legacy-section');
+  sec.style.display = sec.style.display === 'none' ? '' : 'none';
+});
 
 document.getElementById('panorama-view-tabs').addEventListener('click', (e)=>{
   const btn = e.target.closest('.view-tab');
