@@ -967,6 +967,21 @@
   <div class="section-title st-purple" id="share-links-toggle" style="cursor:pointer;">🔗 Links para el equipo — tocá para ver</div>
   <div id="share-links-panel" style="display:none;"></div>
 
+  <div class="section-title st-purple" id="cleanup-toggle" style="cursor:pointer;">🧹 Limpieza rápida de vencidas — tocá para ver</div>
+  <div id="cleanup-panel" style="display:none;">
+    <div class="settings-block">
+      <div class="capture-label">Marcar como terminadas (o eliminar) todas las tareas vencidas de antes de una fecha, de una sola vez.</div>
+      <div class="capture-row">
+        <input type="date" id="cleanup-cutoff">
+        <span id="cleanup-count" style="font-size:12.5px;color:var(--ink-soft);"></span>
+      </div>
+      <div class="capture-row">
+        <button id="cleanup-finalize-btn">✅ Marcar como terminadas</button>
+        <button id="cleanup-delete-btn" style="background:var(--red);color:#fff;">🗑 Eliminar directamente</button>
+      </div>
+    </div>
+  </div>
+
   <div class="section-title st-purple" id="people-settings-toggle" style="cursor:pointer;">⚙️ Personas, Temas y Áreas — tocá para editar</div>
   <div id="people-settings-panel" style="display:none;">
     <div class="settings-block">
@@ -1682,6 +1697,60 @@ function renderShareLinks(){
     });
   });
 }
+
+document.getElementById('cleanup-toggle').addEventListener('click', ()=>{
+  const panel = document.getElementById('cleanup-panel');
+  const isHidden = panel.style.display === 'none';
+  panel.style.display = isHidden ? '' : 'none';
+  if(isHidden){
+    document.getElementById('cleanup-cutoff').value = todayKey();
+    updateCleanupCount();
+  }
+});
+
+// Solo tareas de una vez (sin repetición) y realmente vencidas — las que se repiten
+// todos los días no tienen un "vencimiento" real, así que quedan afuera de la limpieza.
+function tasksVencidasAntesDe(cutoff){
+  return (personalTasks||[]).filter(t=>
+    taskRepeatType(t)==='none' && !t.resolved && t.dueDate && t.dueDate < cutoff
+  );
+}
+
+function updateCleanupCount(){
+  const cutoff = document.getElementById('cleanup-cutoff').value;
+  const countEl = document.getElementById('cleanup-count');
+  if(!cutoff){ countEl.textContent = ''; return; }
+  const n = tasksVencidasAntesDe(cutoff).length;
+  countEl.textContent = `${n} tarea${n!==1?'s':''} vencida${n!==1?'s':''} antes de esa fecha`;
+}
+document.getElementById('cleanup-cutoff').addEventListener('change', updateCleanupCount);
+
+document.getElementById('cleanup-finalize-btn').addEventListener('click', async ()=>{
+  const cutoff = document.getElementById('cleanup-cutoff').value;
+  if(!cutoff) return;
+  const affected = tasksVencidasAntesDe(cutoff);
+  if(!affected.length){ alert('No hay tareas vencidas antes de esa fecha.'); return; }
+  if(!confirm(`¿Marcar como Terminadas las ${affected.length} tareas vencidas antes del ${fmtDue(cutoff)}? Esto no se puede deshacer en bloque (se pueden reabrir una por una después).`)) return;
+  affected.forEach(t=>{ t.status='finalizado'; t.resolved=true; t.finishedUnseen=false; });
+  renderAllTaskViews();
+  updateCleanupCount();
+  await saveTasksMulti(affected);
+  setStatus(`✅ ${affected.length} tareas marcadas como terminadas`);
+});
+
+document.getElementById('cleanup-delete-btn').addEventListener('click', async ()=>{
+  const cutoff = document.getElementById('cleanup-cutoff').value;
+  if(!cutoff) return;
+  const affected = tasksVencidasAntesDe(cutoff);
+  if(!affected.length){ alert('No hay tareas vencidas antes de esa fecha.'); return; }
+  if(!confirm(`¿ELIMINAR (no solo marcar) las ${affected.length} tareas vencidas antes del ${fmtDue(cutoff)}? Esto sí es definitivo, no se pueden recuperar después.`)) return;
+  const ids = affected.map(t=>t.id);
+  personalTasks = personalTasks.filter(t=>!ids.includes(t.id));
+  renderAllTaskViews();
+  updateCleanupCount();
+  await Promise.all(ids.map(id=>deleteOneTaskRemote(id)));
+  setStatus(`🗑 ${ids.length} tareas eliminadas`);
+});
 
 document.getElementById('share-links-toggle').addEventListener('click', ()=>{
   const panel = document.getElementById('share-links-panel');
