@@ -24,6 +24,27 @@
     --rust:#8b4a2b;
     --rust-soft:#eeddd0;
   }
+  body.dark-theme{
+    --bg:#15161c;
+    --card:#1e1f27;
+    --ink:#f1f0ee;
+    --ink-soft:#9a99a6;
+    --line:#33343f;
+    --green:#4fb477;
+    --green-soft:#1c3327;
+    --red:#e0616b;
+    --red-soft:#3a2129;
+    --purple:#8c7ae6;
+    --purple-soft:#2a2540;
+    --rust:#e0a458;
+    --rust-soft:#3a2f1c;
+  }
+  body.dark-theme .plist{background:#25262f;}
+  body.dark-theme .pcard.fabrica{background:#1c2530;border-color:#2c4258;}
+  body.dark-theme .important-ticket{background:#332b16;}
+  body.dark-theme .pcard, body.dark-theme .modal-box, body.dark-theme .capture{
+    box-shadow:0 1px 3px rgba(0,0,0,.35);
+  }
   *{box-sizing:border-box;}
   body{
     margin:0;
@@ -73,7 +94,7 @@
   .settings-item{
     display:flex;align-items:center;justify-content:space-between;gap:8px;
     padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;
-    background:#fff;
+    background:var(--card);
   }
   .settings-item .settings-item-del{
     border:none;background:none;color:var(--ink-soft);cursor:pointer;font-size:16px;
@@ -91,7 +112,7 @@
     border-radius:8px;
     padding:10px;
     font-size:14px;
-    background:#fff;
+    background:var(--card);
     color:var(--ink);
   }
   select{flex:0 0 140px;}
@@ -218,7 +239,7 @@
     align-items:center;
     justify-content:center;
     font-size:13px;
-    background:#fff;
+    background:var(--card);
     color:transparent;
     margin-top:2px;
   }
@@ -303,20 +324,20 @@
   .view-tab{
     font-family:'Poppins',sans-serif;font-weight:600;font-size:12.5px;
     padding:7px 14px;border-radius:16px;border:1px solid var(--line);
-    background:#fff;color:var(--ink-soft);cursor:pointer;
+    background:var(--card);color:var(--ink-soft);cursor:pointer;
   }
   .view-tab.active{background:var(--ink);color:#fff;border-color:var(--ink);}
   .board-filter{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
   .person-chip{
     font-family:'Poppins',sans-serif;font-weight:600;font-size:11.5px;
     padding:5px 12px;border-radius:14px;border:1px solid var(--line);
-    background:#fff;color:var(--ink-soft);cursor:pointer;
+    background:var(--card);color:var(--ink-soft);cursor:pointer;
   }
   .person-chip.active{background:var(--purple);color:#fff;border-color:var(--purple);}
   .sector-chip{
     font-family:'Poppins',sans-serif;font-weight:600;font-size:11.5px;
     padding:5px 12px;border-radius:14px;border:1px solid var(--line);
-    background:#fff;color:var(--ink-soft);cursor:pointer;
+    background:var(--card);color:var(--ink-soft);cursor:pointer;
   }
   .sector-chip.active{color:#fff;}
   .board{display:flex;gap:10px;overflow-x:auto;padding-bottom:10px;margin:0 -16px;padding-left:16px;padding-right:16px;}
@@ -348,7 +369,7 @@
   .presp-inline{display:flex;align-items:center;gap:5px;}
   .presp-name{font-size:11px;font-weight:600;color:var(--ink-soft);white-space:nowrap;}
   .pavatar{width:20px;height:20px;border-radius:50%;color:#fff;font-family:'Poppins',sans-serif;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-  .pcard-check{position:absolute;top:8px;right:8px;width:18px;height:18px;border-radius:50%;border:2px solid var(--line);background:#fff;opacity:0;transition:opacity .12s;}
+  .pcard-check{position:absolute;top:8px;right:8px;width:18px;height:18px;border-radius:50%;border:2px solid var(--line);background:var(--card);opacity:0;transition:opacity .12s;}
   .pcard:hover .pcard-check{opacity:1;}
   .pcard-check:hover{border-color:var(--green);background:var(--green-soft);}
   .pcard.fabrica{background:#f7f9fc;border:1px dashed #b9cbe0;cursor:default;}
@@ -376,7 +397,7 @@
     padding:5px 10px;
     border-radius:12px;
     border:1px solid var(--line);
-    background:#fff;
+    background:var(--card);
     color:var(--ink-soft);
     cursor:pointer;
   }
@@ -393,7 +414,7 @@
     padding:2px 6px;
     border-radius:12px;
     border:1px solid var(--line);
-    background:#fff;
+    background:var(--card);
     color:var(--ink);
   }
   .ticket-text{
@@ -939,7 +960,7 @@
     border-radius:50%;
     border:2px solid var(--line);
     cursor:pointer;
-    background:#fff;
+    background:var(--card);
     align-self:center;
   }
   .summary-check:hover{border-color:var(--green);}
@@ -987,10 +1008,18 @@
 </style>
 </head>
 <body>
+<script>
+// Se aplica lo antes posible (antes de pintar el resto) para que no haya un
+// parpadeo claro→oscuro al cargar si ya habías elegido modo oscuro antes.
+if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add('dark-theme');
+</script>
 <div class="wrap" id="admin-wrap">
   <header>
     <h1 id="app-title">By Nina — Resumen tareas</h1>
-    <div class="datestamp" id="today"></div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button id="theme-toggle-btn" title="Cambiar a modo oscuro" style="background:var(--card);border:1px solid var(--line);color:var(--ink-soft);border-radius:16px;padding:0 14px;height:30px;font-size:13px;">🌙</button>
+      <div class="datestamp" id="today"></div>
+    </div>
   </header>
 
   <div id="finished-notify-wrap" style="display:none;margin-bottom:16px;">
@@ -1001,7 +1030,7 @@
   <div id="panorama-wrap" style="display:none;margin-bottom:22px;">
     <div class="section-title st-green" style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
       <span>🔭 Panorama</span>
-      <button id="panorama-quick-add-btn" style="background:#fff;color:var(--green);padding:0 14px;height:28px;font-size:12px;">➕ Nueva tarea</button>
+      <button id="panorama-quick-add-btn" style="background:var(--card);color:var(--green);padding:0 14px;height:28px;font-size:12px;">➕ Nueva tarea</button>
     </div>
     <div class="view-tabs" id="panorama-view-tabs">
       <button class="view-tab active" data-view="urgencia">Por urgencia</button>
@@ -2609,6 +2638,21 @@ wireInlineCreateSelect('qa-area', '__new_area__', 'Nombre de la nueva área:', a
 wireInlineCreateSelect('qa-sector', '__new_sector__', 'Nombre del nuevo sector:', addCustomSector, '');
 document.getElementById('panorama-quick-add-btn').addEventListener('click', ()=>{
   openQuickAddModal(null, panoramaSingleSelectedSector());
+});
+
+// Interruptor de modo oscuro/claro — se guarda en este navegador (cada persona
+// elige el suyo, no se comparte entre dispositivos ni con el resto del equipo).
+function applyThemeButtonLabel(){
+  const isDark = document.body.classList.contains('dark-theme');
+  const btn = document.getElementById('theme-toggle-btn');
+  btn.textContent = isDark ? '☀️' : '🌙';
+  btn.title = isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro';
+}
+applyThemeButtonLabel();
+document.getElementById('theme-toggle-btn').addEventListener('click', ()=>{
+  document.body.classList.toggle('dark-theme');
+  localStorage.setItem('bynina_theme', document.body.classList.contains('dark-theme') ? 'dark' : 'light');
+  applyThemeButtonLabel();
 });
 
 document.getElementById('legacy-toggle-btn').addEventListener('click', ()=>{
