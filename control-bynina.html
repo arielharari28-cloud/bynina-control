@@ -293,16 +293,55 @@
   }
   .band{border-radius:14px;margin-bottom:12px;overflow:hidden;border:1px solid var(--line);}
   .band-head{font-family:'Poppins',sans-serif;font-weight:700;font-size:13px;padding:9px 14px;display:flex;justify-content:space-between;align-items:center;}
-  .band-body{background:var(--card);padding:0 12px;}
-  .band-body .ticket{margin:10px 0;}
   .band.vencida .band-head{background:var(--red-soft);color:var(--red);}
   .band.hoy .band-head{background:#fbe3cf;color:#9a5a1a;}
   .band.pronto .band-head{background:#faf1c8;color:#8a7415;}
   .band.normal .band-head{background:var(--green-soft);color:var(--green);}
-  .band-empty{padding:12px 0;color:var(--ink-soft);font-size:12.5px;font-style:italic;}
-  .fabrica-ref-ticket{background:#f7f9fc;}
-  .fabrica-ref-ticket .ticket-check{background:transparent;}
-  .fabrica-ref-ticket a.edit-btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center;}
+
+  /* ===== Panorama estilo Trello: pestañas, tablero con columnas y tarjetas ===== */
+  .view-tabs{display:flex;gap:8px;margin-bottom:12px;}
+  .view-tab{
+    font-family:'Poppins',sans-serif;font-weight:600;font-size:12.5px;
+    padding:7px 14px;border-radius:16px;border:1px solid var(--line);
+    background:#fff;color:var(--ink-soft);cursor:pointer;
+  }
+  .view-tab.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .board{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px;margin:0 -16px;padding-left:16px;padding-right:16px;}
+  .plist{
+    flex:0 0 240px;background:#e5e2d6;border-radius:12px;padding:10px;
+  }
+  .plist-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:4px 6px 10px;font-family:'Poppins',sans-serif;font-weight:700;font-size:12.5px;
+  }
+  .plist-head .count{background:rgba(0,0,0,.08);border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:600;color:var(--ink-soft);}
+  .plist.vencida .plist-head{color:var(--red);}
+  .plist.hoy .plist-head{color:#9a5a1a;}
+  .plist.pronto .plist-head{color:#8a7415;}
+  .plist.normal .plist-head{color:var(--green);}
+  .pcards{display:flex;flex-direction:column;gap:7px;}
+  .pcard{
+    background:var(--card);border-radius:9px;padding:9px 10px 8px;
+    box-shadow:0 1px 2px rgba(0,0,0,.09);cursor:pointer;position:relative;
+    transition:box-shadow .12s, transform .12s;
+  }
+  .pcard:hover{box-shadow:0 3px 10px rgba(0,0,0,.14);transform:translateY(-1px);}
+  .pcard-labels{display:flex;gap:4px;margin-bottom:6px;flex-wrap:wrap;}
+  .plabel-chip{font-family:'Poppins',sans-serif;font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:5px;color:#fff;}
+  .pcard-title{font-size:13px;line-height:1.35;margin-bottom:8px;color:var(--ink);}
+  .pcard-footer{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+  .pdue-pill{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:6px;background:#f1efe8;color:var(--ink-soft);}
+  .pdue-pill.overdue{background:var(--red-soft);color:var(--red);}
+  .presp-inline{display:flex;align-items:center;gap:5px;}
+  .presp-name{font-size:11px;font-weight:600;color:var(--ink-soft);white-space:nowrap;}
+  .pavatar{width:20px;height:20px;border-radius:50%;color:#fff;font-family:'Poppins',sans-serif;font-size:9.5px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .pcard-check{position:absolute;top:8px;right:8px;width:18px;height:18px;border-radius:50%;border:2px solid var(--line);background:#fff;opacity:0;transition:opacity .12s;}
+  .pcard:hover .pcard-check{opacity:1;}
+  .pcard-check:hover{border-color:var(--green);background:var(--green-soft);}
+  .pcard.fabrica{background:#f7f9fc;border:1px dashed #b9cbe0;cursor:default;}
+  .pcard.fabrica .pcard-title{font-size:12.5px;}
+  .padd-card{background:transparent;border:none;text-align:left;padding:7px 8px;font-size:12.5px;color:var(--ink-soft);cursor:pointer;border-radius:8px;font-family:'Inter',sans-serif;width:100%;}
+  .padd-card:hover{background:rgba(0,0,0,.05);color:var(--ink);}
   .time-badge{
     background:var(--purple-soft);
     color:var(--purple);
@@ -943,8 +982,12 @@
   </div>
 
   <div id="panorama-wrap" style="display:none;margin-bottom:22px;">
-    <div class="section-title st-green">🔭 Panorama — todo por urgencia</div>
-    <div id="panorama-bands"></div>
+    <div class="section-title st-green">🔭 Panorama</div>
+    <div class="view-tabs" id="panorama-view-tabs">
+      <button class="view-tab active" data-view="urgencia">Por urgencia</button>
+      <button class="view-tab" data-view="responsable">Por responsable</button>
+    </div>
+    <div class="board" id="panorama-board"></div>
   </div>
 
   <div class="section-title st-rust">➕ Agregar tarea</div>
@@ -2156,50 +2199,174 @@ function personalTasksPendingForPanorama(){
   });
 }
 
-function fabricaRowHtml(it){
-  const diasLabel = (it.dias!==null && it.dias!==undefined) ? `${it.dias} día${it.dias!==1?'s':''} en ${it.secTitle||'esta etapa'}` : (it.secTitle||'');
+function initialsColorFor(name){
+  const palette = ['#8b4a2b','#2c5a8a','#5b4e9e','#2f6b4f','#a3253d','#9a5a1a'];
+  let h = 0;
+  for(const c of (name||'')) h = (h*31 + c.charCodeAt(0)) % palette.length;
+  return palette[h];
+}
+function initialsOf(name){
+  if(!name) return '?';
+  return name.trim().split(/\s+/).slice(0,2).map(w=>w[0].toUpperCase()).join('');
+}
+
+function fabricaCardHtml(it){
+  const diasLabel = (it.dias!==null && it.dias!==undefined) ? `${it.dias}d en ${it.secTitle||'etapa'}` : (it.secTitle||'');
   return `
-    <div class="ticket fabrica-ref-ticket">
-      <div class="ticket-check" style="opacity:.3;cursor:default;" title="Se resuelve desde la app de Fábrica">🏭</div>
-      <div class="ticket-body">
-        <div class="ticket-meta">
-          <span class="due-badge" style="background:#dde8f5;color:#2c5a8a">🏭 Fábrica</span>
-          <span class="due-badge ${it.atrasado?'overdue':''}">${it.atrasado?'⚠️ ':''}${escapeHtml(diasLabel)}</span>
-          ${it.responsable?`<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ ${escapeHtml(it.responsable)}</span>`:''}
-        </div>
-        <div class="ticket-text">${escapeHtml(it.code||'')}${it.name?' — '+escapeHtml(it.name):''}${it.accion?` · 👉 ${escapeHtml(it.accion)}`:''}</div>
+    <a class="pcard fabrica" href="${FABRICA_APP_URL}" target="_blank" rel="noopener" style="text-decoration:none;display:block;color:inherit;">
+      <div class="pcard-labels"><span class="plabel-chip" style="background:#2c5a8a">🏭 Fábrica</span></div>
+      <div class="pcard-title">${escapeHtml(it.code||'')}${it.name?' — '+escapeHtml(it.name):''}${it.accion?`<br><span style="color:var(--ink-soft);font-weight:500;">👉 ${escapeHtml(it.accion)}</span>`:''}</div>
+      <div class="pcard-footer">
+        <span class="pdue-pill ${it.atrasado?'overdue':''}">${it.atrasado?'⚠️ ':''}${escapeHtml(diasLabel)}</span>
+        <div class="presp-inline"><span class="presp-name">${escapeHtml(it.responsable||'')}</span></div>
       </div>
-      <a class="edit-btn" href="${FABRICA_APP_URL}" target="_blank" rel="noopener" title="Ver y resolver en la app de Fábrica">↗</a>
+    </a>`;
+}
+
+// Tarjeta estilo Trello para una tarea propia: etiqueta de sector, texto, y en el pie
+// la fecha + quién es responsable (nombre + avatar con iniciales). El círculo de tildar
+// solo aparece al pasar el mouse (como Asana); tocar el resto de la tarjeta abre el editor
+// completo (ahí es donde se cambia el estado Pendiente/En proceso/Finalizado).
+function panoramaCardHtml(t){
+  const sectorLabel = t.sector ? (SECTORS[t.sector]||t.sector) : (AREAS[t.area]||t.area);
+  const responsableName = PEOPLE[t.assignedPerson] || t.assignedPerson || 'Sin responsable';
+  const overdue = t.dueDate && t.dueDate < todayKey();
+  const dueTxt = t.dueDate ? fmtDue(t.dueDate) : '';
+  return `
+    <div class="pcard" data-id="${t.id}">
+      <div class="pcard-check panorama-check" data-id="${t.id}" title="Marcar como terminada"></div>
+      <div class="pcard-labels"><span class="plabel-chip" style="background:${initialsColorFor(sectorLabel)}">${escapeHtml(sectorLabel)}</span></div>
+      <div class="pcard-title">${escapeHtml(t.text)}</div>
+      <div class="pcard-footer">
+        ${dueTxt ? `<span class="pdue-pill ${overdue?'overdue':''}">📅 ${dueTxt}</span>` : '<span></span>'}
+        <div class="presp-inline">
+          <span class="presp-name">${escapeHtml(responsableName)}</span>
+          <div class="pavatar" style="background:${initialsColorFor(responsableName)}" title="${escapeHtml(responsableName)}">${initialsOf(responsableName)}</div>
+        </div>
+      </div>
     </div>`;
 }
 
 const PANORAMA_BANDS = [
   {key:'vencida', label:'🔴 Urgente / vencido'},
   {key:'hoy', label:'🟠 Vence hoy'},
-  {key:'pronto', label:'🟡 Pronto (2 días)'},
+  {key:'pronto', label:'🟡 Pronto'},
   {key:'normal', label:'🟢 Sin apuro'},
 ];
+let panoramaView = 'urgencia';
 
 function renderPanorama(){
   const wrap = document.getElementById('panorama-wrap');
   if(!wrap) return;
   if(!isAdmin){ wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
+  if(panoramaView === 'responsable') renderPanoramaByResponsable();
+  else renderPanoramaByUrgencia();
+}
 
+function renderPanoramaByUrgencia(){
+  const board = document.getElementById('panorama-board');
   const grouped = {vencida:[], hoy:[], pronto:[], normal:[]};
   personalTasksPendingForPanorama().forEach(t=>{ grouped[urgencyKeyOf(t)].push({kind:'tarea', t}); });
   Object.values(fabricaPendientes||{}).forEach(it=>{
     grouped[it.atrasado ? 'vencida' : 'normal'].push({kind:'fabrica', it});
   });
 
-  const el = document.getElementById('panorama-bands');
-  el.innerHTML = PANORAMA_BANDS.map(b=>{
+  board.innerHTML = PANORAMA_BANDS.map(b=>{
     const items = grouped[b.key];
-    const body = items.length ? items.map(x=> x.kind==='fabrica' ? fabricaRowHtml(x.it) : personalTaskHtml(x.t)).join('') : '<div class="band-empty">Nada acá 🎉</div>';
-    return `<div class="band ${b.key}"><div class="band-head"><span>${b.label}</span><span>${items.length}</span></div><div class="band-body">${body}</div></div>`;
+    return `
+    <div class="plist ${b.key}">
+      <div class="plist-head"><span>${b.label}</span><span class="count">${items.length}</span></div>
+      <div class="pcards">${items.map(x=> x.kind==='fabrica' ? fabricaCardHtml(x.it) : panoramaCardHtml(x.t)).join('')}</div>
+      <button class="padd-card" data-preset-person="">➕ Agregar tarjeta</button>
+    </div>`;
   }).join('');
-  wireTaskItemEvents(el);
+  wirePanoramaCardEvents(board);
 }
+
+// Mismas tarjetas, agrupadas por responsable en vez de por urgencia — cada columna es
+// una persona (ordenadas por quién tiene más vencidas primero), y adentro se ordena con
+// lo urgente arriba. Los pendientes de fábrica usan personKeys (armado en fabrica-PRUEBA.html)
+// para caer en la columna de la persona real — "Ariel y Stef" cae en las dos, "Cortador"
+// cae en la de quien tenga ese rol hoy.
+function renderPanoramaByResponsable(){
+  const board = document.getElementById('panorama-board');
+  const grouped = {};
+  const addTo = (key, label, entry)=>{
+    if(!grouped[key]) grouped[key] = {label, items:[]};
+    grouped[key].items.push(entry);
+  };
+  personalTasksPendingForPanorama().forEach(t=>{
+    const key = t.assignedPerson || '__sinresp__';
+    const label = PEOPLE[t.assignedPerson] || 'Sin responsable';
+    addTo(key, label, {kind:'tarea', t, urg:urgencyKeyOf(t)});
+  });
+  Object.values(fabricaPendientes||{}).forEach(it=>{
+    const urg = it.atrasado ? 'vencida' : 'normal';
+    if(it.personKeys && it.personKeys.length){
+      it.personKeys.forEach(pk=> addTo(pk, PEOPLE[pk] || pk, {kind:'fabrica', it, urg}));
+    } else {
+      addTo('__fab_'+(it.responsable||'?'), it.responsable || 'Fábrica (sin asignar)', {kind:'fabrica', it, urg});
+    }
+  });
+
+  const urgRank = {vencida:0, hoy:1, pronto:2, normal:3};
+  const keys = Object.keys(grouped).sort((a,b)=>{
+    const ua = grouped[a].items.filter(x=>x.urg==='vencida').length;
+    const ub = grouped[b].items.filter(x=>x.urg==='vencida').length;
+    if(ua!==ub) return ub-ua;
+    return grouped[a].label.localeCompare(grouped[b].label);
+  });
+
+  board.innerHTML = keys.map(key=>{
+    const g = grouped[key];
+    const items = g.items.slice().sort((a,b)=>urgRank[a.urg]-urgRank[b.urg]);
+    const urgentCount = items.filter(x=>x.urg==='vencida').length;
+    return `
+    <div class="plist">
+      <div class="plist-head"><span>🧑 ${escapeHtml(g.label)}</span><span class="count">${items.length}${urgentCount?` · ⚠️${urgentCount}`:''}</span></div>
+      <div class="pcards">${items.map(x=> x.kind==='fabrica' ? fabricaCardHtml(x.it) : panoramaCardHtml(x.t)).join('')}</div>
+      <button class="padd-card" data-preset-person="${key.startsWith('__')?'':key}">➕ Agregar tarjeta</button>
+    </div>`;
+  }).join('');
+  wirePanoramaCardEvents(board);
+}
+
+function wirePanoramaCardEvents(board){
+  board.querySelectorAll('.pcard[data-id]').forEach(card=>{
+    card.addEventListener('click', (e)=>{
+      if(e.target.closest('.panorama-check')) return;
+      openEditPersonalTask(card.dataset.id);
+    });
+  });
+  board.querySelectorAll('.panorama-check').forEach(chk=>{
+    chk.addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      const t = personalTasks.find(x=>x.id===chk.dataset.id);
+      if(!t) return;
+      setTaskStatusForDate(t, todayKey(), 'finalizado');
+      renderAllTaskViews();
+      await saveOneTask(t);
+    });
+  });
+  board.querySelectorAll('.padd-card').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const presetPerson = btn.dataset.presetPerson;
+      if(presetPerson) document.getElementById('task-person').value = presetPerson;
+      document.getElementById('task-text-input').scrollIntoView({behavior:'smooth', block:'center'});
+      document.getElementById('task-text-input').focus();
+    });
+  });
+}
+
+document.getElementById('panorama-view-tabs').addEventListener('click', (e)=>{
+  const btn = e.target.closest('.view-tab');
+  if(!btn) return;
+  document.querySelectorAll('#panorama-view-tabs .view-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  panoramaView = btn.dataset.view;
+  renderPanorama();
+});
 
 let currentDate = new Date();
 let personalTasks = [];
