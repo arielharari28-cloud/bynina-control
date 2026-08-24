@@ -343,7 +343,11 @@
   .board{display:flex;gap:10px;overflow-x:auto;padding-bottom:10px;margin:0 -16px;padding-left:16px;padding-right:16px;}
   .plist{
     flex:1 1 190px;min-width:160px;max-width:280px;background:#e5e2d6;border-radius:12px;padding:10px;
+    transition:background .12s, box-shadow .12s;
   }
+  .plist.drag-over{background:#d8d3c0;box-shadow:inset 0 0 0 2px #5b4e9e;}
+  .pcard[draggable="true"]{cursor:grab;}
+  .pcard[draggable="true"].dragging{opacity:.4;}
   .plist-head{
     display:flex;align-items:center;justify-content:space-between;
     padding:4px 6px 10px;font-family:'Poppins',sans-serif;font-weight:700;font-size:12.5px;
@@ -2290,7 +2294,12 @@ function attachFabricaPendientesListener(){
 // Misma idea que taskUrgency/urgencyBadgeHtml, pero devuelve la clave de la franja
 // (para agrupar), no el badge visual.
 function urgencyKeyOf(t){
-  if(taskRepeatType(t) !== 'none' || !t.dueDate) return 'normal';
+  // Las tareas que se repiten (diarias, semanales, etc.) solo aparecen en el panorama
+  // cuando todavía están pendientes para HOY (ver personalTasksPendingForPanorama) —
+  // por eso, mientras sigan sin marcarse, van directo a "Vence hoy" en vez de a
+  // "Sin apuro": son, por definición, tareas vigentes de hoy.
+  if(taskRepeatType(t) !== 'none') return 'hoy';
+  if(!t.dueDate) return 'normal';
   const today = todayKey();
   if(t.dueDate < today) return 'vencida';
   if(t.dueDate === today) return 'hoy';
@@ -2341,13 +2350,18 @@ function panoramaCardHtml(t){
   const responsableName = PEOPLE[t.assignedPerson] || t.assignedPerson || 'Sin responsable';
   const overdue = t.dueDate && t.dueDate < todayKey();
   const dueTxt = t.dueDate ? fmtDue(t.dueDate) : '';
+  const timeTxt = t.time ? `<span class="pdue-pill">🕐 ${escapeHtml(t.time)}</span>` : '';
+  const draggableAttr = taskRepeatType(t) === 'none' ? 'draggable="true"' : '';
   return `
-    <div class="pcard" data-id="${t.id}">
+    <div class="pcard" data-id="${t.id}" ${draggableAttr}>
       <div class="pcard-check panorama-check" data-id="${t.id}" title="Marcar como terminada"></div>
       <div class="pcard-labels"><span class="plabel-chip" style="background:${initialsColorFor(sectorLabel)}">${escapeHtml(sectorLabel)}</span></div>
       <div class="pcard-title">${escapeHtml(t.text)}</div>
       <div class="pcard-footer">
-        ${dueTxt ? `<span class="pdue-pill ${overdue?'overdue':''}">📅 ${dueTxt}</span>` : '<span></span>'}
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${dueTxt ? `<span class="pdue-pill ${overdue?'overdue':''}">📅 ${dueTxt}</span>` : ''}
+          ${timeTxt}
+        </div>
         <div class="presp-inline">
           <span class="presp-name">${escapeHtml(responsableName)}</span>
           <div class="pavatar" style="background:${initialsColorFor(responsableName)}" title="${escapeHtml(responsableName)}">${initialsOf(responsableName)}</div>
@@ -2501,6 +2515,65 @@ function renderPanoramaByUrgencia(){
     </div>`;
   }).join('');
   wirePanoramaCardEvents(board);
+  wireUrgencyDragDrop(board);
+}
+
+// Fecha que le corresponde a una tarjeta según la columna de urgencia donde la soltás.
+// No intenta ser "exacta": alcanza con que caiga del lado correcto de urgencyKeyOf().
+function dueDateForBand(bandKey){
+  const today = todayKey();
+  const addDays = (n)=>{
+    const d = new Date(today+'T00:00:00');
+    d.setDate(d.getDate()+n);
+    return dateKey(d);
+  };
+  if(bandKey==='vencida') return prevDayKey(today);
+  if(bandKey==='hoy') return today;
+  if(bandKey==='pronto') return addDays(2);
+  return addDays(5); // 'normal' — Sin apuro
+}
+
+// Arrastrar y soltar tarjetas propias entre columnas del tablero de urgencia: al soltar,
+// le actualiza la fecha de vencimiento para que quede del lado correcto (no toca las
+// tarjetas de Fábrica, que son solo lectura, ni las que se repiten, que siempre caen en
+// "Sin apuro" sin importar la fecha).
+function wireUrgencyDragDrop(board){
+  board.querySelectorAll('.pcard[draggable="true"]').forEach(card=>{
+    card.addEventListener('dragstart', ()=>{
+      dragUrgencyCardId = card.dataset.id;
+      card.classList.add('dragging');
+    });
+    card.addEventListener('dragend', ()=>{
+      card.classList.remove('dragging');
+      dragUrgencyCardId = null;
+    });
+  });
+  board.querySelectorAll('.plist').forEach(col=>{
+    const bandKey = PANORAMA_BANDS.find(b=>col.classList.contains(b.key))?.key;
+    if(!bandKey) return;
+    col.addEventListener('dragover', (e)=>{
+      if(!dragUrgencyCardId) return;
+      e.preventDefault();
+      col.classList.add('drag-over');
+    });
+    col.addEventListener('dragleave', (e)=>{
+      if(e.target === col) col.classList.remove('drag-over');
+    });
+    col.addEventListener('drop', async (e)=>{
+      e.preventDefault();
+      col.classList.remove('drag-over');
+      const id = dragUrgencyCardId;
+      dragUrgencyCardId = null;
+      if(!id) return;
+      const t = personalTasks.find(x=>x.id===id);
+      if(!t) return;
+      if(urgencyKeyOf(t) === bandKey) return;
+      t.dueDate = dueDateForBand(bandKey);
+      renderAllTaskViews();
+      await saveOneTask(t);
+      setStatus('tarjeta movida');
+    });
+  });
 }
 
 // Mismas tarjetas, agrupadas por responsable en vez de por urgencia — cada columna es
@@ -2541,9 +2614,29 @@ function renderPanoramaByResponsable(){
     return grouped[a].label.localeCompare(grouped[b].label);
   });
 
+  // Orden dentro de cada columna: si el usuario ya reordenó a mano (arrastrando), eso
+  // manda siempre (respOrder). Si no, el orden por defecto es por hora (🕐), con las
+  // tareas sin hora al final, y entre las que empatan, la más urgente primero.
   board.innerHTML = keys.map(key=>{
     const g = grouped[key];
-    const items = g.items.slice().sort((a,b)=>urgRank[a.urg]-urgRank[b.urg]);
+    const hasManualOrder = g.items.some(x=>x.kind==='tarea' && x.t.respOrder!==undefined);
+    const items = g.items.slice().sort((a,b)=>{
+      if(hasManualOrder){
+        // Con orden manual activo, lo que no tiene respOrder se manda al final
+        // (por hora, y si tampoco tiene, por urgencia) para no perderlo de vista.
+        const ma = a.kind==='tarea' ? a.t.respOrder : undefined;
+        const mb = b.kind==='tarea' ? b.t.respOrder : undefined;
+        if(ma!==undefined && mb!==undefined) return ma-mb;
+        if(ma!==undefined) return -1;
+        if(mb!==undefined) return 1;
+      }
+      const ta = a.kind==='tarea' ? (a.t.time||'') : '';
+      const tb = b.kind==='tarea' ? (b.t.time||'') : '';
+      if(ta && tb && ta!==tb) return ta.localeCompare(tb);
+      if(ta && !tb) return -1;
+      if(!ta && tb) return 1;
+      return urgRank[a.urg]-urgRank[b.urg];
+    });
     const urgentCount = items.filter(x=>x.urg==='vencida').length;
     return `
     <div class="plist">
@@ -2553,6 +2646,54 @@ function renderPanoramaByResponsable(){
     </div>`;
   }).join('');
   wirePanoramaCardEvents(board);
+  wireResponsableDragDrop(board);
+}
+
+// Arrastrar y soltar para reordenar a mano DENTRO de la columna de cada responsable
+// (no mueve tarjetas entre personas). En cuanto soltás una vez, esa columna queda con
+// orden manual (respOrder) y ya no se reordena sola por hora — hasta que el usuario
+// vuelva a arrastrar. Las tarjetas de Fábrica no son arrastrables (son solo lectura).
+function wireResponsableDragDrop(board){
+  board.querySelectorAll('.plist').forEach(col=>{
+    col.querySelectorAll('.pcard[data-id][draggable="true"]').forEach(card=>{
+      card.addEventListener('dragstart', ()=>{
+        dragRespCardId = card.dataset.id;
+        card.classList.add('dragging');
+      });
+      card.addEventListener('dragend', ()=>{
+        card.classList.remove('dragging');
+        dragRespCardId = null;
+      });
+    });
+    col.querySelectorAll('.pcard[data-id]').forEach(card=>{
+      card.addEventListener('dragover', (e)=>{ if(dragRespCardId) e.preventDefault(); });
+      card.addEventListener('drop', async (e)=>{
+        e.preventDefault();
+        const targetId = card.dataset.id;
+        const draggedId = dragRespCardId;
+        dragRespCardId = null;
+        if(!draggedId || draggedId===targetId) return;
+        if(!col.querySelector(`.pcard[data-id="${draggedId}"]`)) return; // vino de otra columna, ignorar
+        await reorderResponsableColumn(col, draggedId, targetId);
+      });
+    });
+  });
+}
+
+async function reorderResponsableColumn(col, draggedId, targetId){
+  const ids = Array.from(col.querySelectorAll('.pcard[data-id]')).map(c=>c.dataset.id);
+  const fromIdx = ids.indexOf(draggedId);
+  const toIdx = ids.indexOf(targetId);
+  if(fromIdx===-1 || toIdx===-1) return;
+  const [moved] = ids.splice(fromIdx,1);
+  ids.splice(toIdx,0,moved);
+  const touched = [];
+  ids.forEach((id,i)=>{
+    const t = personalTasks.find(x=>x.id===id);
+    if(t){ t.respOrder = i; touched.push(t); }
+  });
+  renderAllTaskViews();
+  await saveTasksMulti(touched);
 }
 
 function wirePanoramaCardEvents(board){
@@ -3368,6 +3509,8 @@ document.getElementById('edit-ptask-repeat-days').addEventListener('click', (e)=
 });
 
 let dragTicketId = null;
+let dragUrgencyCardId = null;
+let dragRespCardId = null;
 let dragSummaryId = null;
 let dragSummaryNoDateId = null;
 
