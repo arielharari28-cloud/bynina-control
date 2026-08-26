@@ -1591,6 +1591,14 @@ function setTaskStatusForDate(t, dateStr, status){
     t.statusDates[dateStr] = status;
     if(!t.doneDates) t.doneDates = {};
     if(status === 'finalizado') t.doneDates[dateStr] = true; else delete t.doneDates[dateStr];
+    // Si marcás como finalizada la ocurrencia de HOY, se descarta de una todo el
+    // atraso de fechas anteriores sin marcar (ya no tiene sentido "ponerse al día"
+    // con cada día viejo de una tarea diaria/semanal — con hacerla hoy alcanza).
+    if(status === 'finalizado' && dateStr === todayKey()){
+      Object.keys(t.statusDates).forEach(dStr=>{
+        if(dStr < dateStr) delete t.statusDates[dStr];
+      });
+    }
   } else {
     t.status = status;
     t.resolved = (status === 'finalizado');
