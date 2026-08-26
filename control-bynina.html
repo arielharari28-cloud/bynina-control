@@ -1021,6 +1021,7 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
   <header>
     <h1 id="app-title">By Nina — Resumen tareas</h1>
     <div style="display:flex;align-items:center;gap:10px;">
+      <button id="pedido-open-btn" style="display:none;background:var(--card);border:1px solid var(--line);color:var(--ink-soft);border-radius:16px;padding:0 14px;height:30px;font-size:13px;">📨 Pedirle algo a Ariel</button>
       <button id="theme-toggle-btn" title="Cambiar a modo oscuro" style="background:var(--card);border:1px solid var(--line);color:var(--ink-soft);border-radius:16px;padding:0 14px;height:30px;font-size:13px;">🌙</button>
       <div class="datestamp" id="today"></div>
     </div>
@@ -1055,7 +1056,6 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
     <div class="capture-row">
       <select id="task-area"></select>
       <select id="task-sector"></select>
-      <select id="task-category"></select>
       <select id="task-person"></select>
       <input type="date" id="task-due-date">
       <input type="time" id="task-time-input">
@@ -1093,14 +1093,6 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
       <div class="capture-row">
         <input type="text" id="new-person-input" placeholder="Nombre de la nueva persona...">
         <button id="new-person-add-btn">Agregar</button>
-      </div>
-    </div>
-    <div class="settings-block">
-      <div class="capture-label">Temas</div>
-      <div id="category-settings-list"></div>
-      <div class="capture-row">
-        <input type="text" id="new-category-input" placeholder="Nombre del nuevo tema...">
-        <button id="new-category-add-btn">Agregar</button>
       </div>
     </div>
     <div class="settings-block">
@@ -1156,6 +1148,20 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
   <div class="status-bar" id="status-bar">cargando...</div>
 </div>
 
+<div class="modal-overlay" id="pedido-modal">
+  <div class="modal-box">
+    <div class="modal-title">📨 Pedirle algo a Ariel</div>
+    <div class="modal-field">
+      <label for="pedido-text">Qué necesitás</label>
+      <textarea id="pedido-text" placeholder="Contale a Ariel qué necesitás..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-cancel-btn" id="pedido-cancel">Cancelar</button>
+      <button id="pedido-send">Enviar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="quick-add-modal">
   <div class="modal-box">
     <div class="modal-title">➕ Nueva tarjeta</div>
@@ -1177,6 +1183,12 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
       <div class="modal-field">
         <label for="qa-due">Vence</label>
         <input type="date" id="qa-due">
+      </div>
+    </div>
+    <div class="modal-row">
+      <div class="modal-field">
+        <label for="qa-time">Horario (opcional)</label>
+        <input type="time" id="qa-time">
       </div>
     </div>
     <div class="modal-field">
@@ -1205,20 +1217,16 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
       </div>
     </div>
     <div class="modal-row">
-      <div class="modal-field">
-        <label for="edit-ptask-category">Tema</label>
-        <select id="edit-ptask-category"></select>
-      </div>
       <div class="modal-field" id="edit-ptask-person-field">
         <label for="edit-ptask-person">Responsable</label>
         <select id="edit-ptask-person"></select>
       </div>
-    </div>
-    <div class="modal-row">
       <div class="modal-field">
         <label for="edit-ptask-due">Vence</label>
         <input type="date" id="edit-ptask-due">
       </div>
+    </div>
+    <div class="modal-row">
       <div class="modal-field">
         <label for="edit-ptask-time">Horario</label>
         <input type="time" id="edit-ptask-time">
@@ -1240,6 +1248,7 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
     </div>
     <div class="weekday-picker" id="edit-ptask-repeat-days" style="display:none;"></div>
     <div class="modal-footer">
+      <button class="del-btn" id="edit-ptask-delete" title="Eliminar" style="margin-right:auto;background:var(--red);color:#fff;">🗑 Eliminar</button>
       <button class="modal-cancel-btn" id="edit-ptask-cancel">Cancelar</button>
       <button id="edit-ptask-save">Guardar</button>
     </div>
@@ -1355,74 +1364,22 @@ async function removePerson(key){
   refreshAllPersonSelects();
 }
 
-/* ===== Tema de la tarea (Web / Diseño / Redes / Marketing / Otro, + personalizados) ===== */
-const BASE_CATEGORIES = {web:'Web', diseno:'Diseño', redes:'Redes', marketing:'Marketing', otro:'Otro'};
-const BASE_CATEGORY_COLOR = {web:'#5b4e9e', diseno:'#8b4a2b', redes:'#2f6b4f', marketing:'#7a3230', otro:'#847d70'};
+/* ===== Color fijo por sector (para la barrita de color del ticket) ===== */
+const BASE_SECTOR_COLOR = {
+  fabrica:'#8b4a2b', logistica:'#2c5a8a', diseno:'#8b4a2b',
+  administracion:'#847d70', ventas:'#a3253d', deposito:'#9a5a1a',
+  web:'#5b4e9e', redes:'#2f6b4f', marketing:'#7a3230'
+};
 const CUSTOM_COLOR_PALETTE = ['#5b4e9e','#8b4a2b','#2f6b4f','#7a3230','#847d70','#1f6f78','#a1662f','#6b4f8f','#3f7a4a','#9c4a63'];
 function hashColorFromKey(key){
   let hash = 0;
   for(let i=0;i<key.length;i++){ hash = (hash*31 + key.charCodeAt(i)) >>> 0; }
   return CUSTOM_COLOR_PALETTE[hash % CUSTOM_COLOR_PALETTE.length];
 }
-function colorForCategory(cat){
-  return BASE_CATEGORY_COLOR[cat] || hashColorFromKey(cat || 'otro');
+function colorForSector(sec){
+  if(!sec) return '#c8c2b4';
+  return BASE_SECTOR_COLOR[sec] || hashColorFromKey(sec);
 }
-let customCategories = {};
-let hiddenCategoryKeys = [];
-let TASK_CATEGORIES = {};
-function rebuildCategoryLists(){
-  TASK_CATEGORIES = {...BASE_CATEGORIES, ...customCategories};
-}
-rebuildCategoryLists();
-
-const CATEGORY_CONFIG_KEY = 'control_bynina/category_config';
-async function loadCategoryConfig(){
-  try{
-    const val = await fbGet(CATEGORY_CONFIG_KEY);
-    if(val){
-      const parsed = JSON.parse(val);
-      customCategories = parsed.customCategories || {};
-      hiddenCategoryKeys = parsed.hiddenCategoryKeys || [];
-    }
-  }catch(e){}
-  rebuildCategoryLists();
-}
-async function saveCategoryConfig(){
-  try{
-    await fbSet(CATEGORY_CONFIG_KEY, JSON.stringify({customCategories, hiddenCategoryKeys}));
-  }catch(e){}
-}
-async function addCustomCategory(name){
-  const label = name.trim();
-  if(!label) return null;
-  const key = slugifyKey(label, Object.keys(TASK_CATEGORIES));
-  customCategories[key] = label;
-  rebuildCategoryLists();
-  await saveCategoryConfig();
-  refreshAllCategorySelects();
-  return key;
-}
-async function removeCategory(key){
-  if(customCategories[key]){
-    delete customCategories[key];
-  } else {
-    if(!hiddenCategoryKeys.includes(key)) hiddenCategoryKeys.push(key);
-  }
-  rebuildCategoryLists();
-  await saveCategoryConfig();
-  refreshAllCategorySelects();
-}
-function visibleCategoryEntries(){
-  return Object.entries(TASK_CATEGORIES).filter(([k])=>!hiddenCategoryKeys.includes(k));
-}
-
-function categorySelectOptionsHtml(selected){
-  return visibleCategoryEntries().map(([k,v])=>
-    `<option value="${k}" ${k===(selected||'otro')?'selected':''}>${v}</option>`
-  ).join('') + (isAdmin ? `<option value="__new_category__">+ Nuevo tema...</option>` : '');
-}
-
-/* ===== Panel de configuración: Personas y Temas (agregar/quitar manualmente) ===== */
 function refreshAllPersonSelects(){
   renderFilters();
   renderMidiaPersonFilter();
@@ -1430,14 +1387,7 @@ function refreshAllPersonSelects(){
   populateEditPersonSelect();
   populateEditPtaskPersonSelect();
   populateTaskPersonSelect();
-  renderCalPersonFilter();
   renderPeopleSettingsList();
-}
-function refreshAllCategorySelects(){
-  renderTeamCategoryChips();
-  renderEmployeeCategoryChips();
-  renderCalCategoryFilter();
-  renderCategorySettingsList();
 }
 
 function renderPeopleSettingsList(){
@@ -1458,27 +1408,8 @@ function renderPeopleSettingsList(){
   });
 }
 
-function renderCategorySettingsList(){
-  const el = document.getElementById('category-settings-list');
-  if(!el) return;
-  const entries = visibleCategoryEntries();
-  el.innerHTML = entries.length ? entries.map(([k,v])=>`
-    <div class="settings-item">
-      <span>${escapeHtml(v)}</span>
-      <button class="settings-item-del" data-key="${k}" title="Quitar de las listas">×</button>
-    </div>
-  `).join('') : '<div class="empty">No hay temas cargados.</div>';
-  el.querySelectorAll('.settings-item-del').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      if(!confirm(`¿Quitar el tema "${TASK_CATEGORIES[btn.dataset.key]}" de las listas para elegir? Las tareas viejas con este tema van a seguir mostrándolo.`)) return;
-      await removeCategory(btn.dataset.key);
-    });
-  });
-}
-
-const peopleAndCategoryConfigReady = (async ()=>{
+const peopleConfigReady = (async ()=>{
   await loadPeopleConfig();
-  await loadCategoryConfig();
 })();
 
 /* ===== Repetición flexible (ninguna / diaria / semanal / cada 15 días / mensual) ===== */
@@ -1811,13 +1742,6 @@ function isOverdue(dueStr, resolved){
   return dueStr < today;
 }
 
-function categoryTagHtml(t){
-  const cat = t.category || 'otro';
-  const label = TASK_CATEGORIES[cat] || TASK_CATEGORIES.otro;
-  const color = colorForCategory(cat);
-  return `<span class="due-badge cat-badge" style="background:${color};color:#fff;">${escapeHtml(label)}</span>`;
-}
-
 function repeatBadgeHtml(t){
   const type = taskRepeatType(t);
   if(type === 'none') return null;
@@ -1919,8 +1843,8 @@ document.getElementById('people-settings-toggle').addEventListener('click', ()=>
   panel.style.display = isHidden ? '' : 'none';
   if(isHidden){
     renderPeopleSettingsList();
-    renderCategorySettingsList();
     renderAreaSettingsList();
+    renderSectorSettingsList();
   }
 });
 
@@ -1938,17 +1862,17 @@ document.getElementById('new-person-input').addEventListener('keydown', (e)=>{
   }
 });
 
-document.getElementById('new-category-add-btn').addEventListener('click', async ()=>{
-  const input = document.getElementById('new-category-input');
+document.getElementById('new-sector-add-btn').addEventListener('click', async ()=>{
+  const input = document.getElementById('new-sector-input');
   const name = input.value.trim();
   if(!name) return;
-  await addCustomCategory(name);
+  await addCustomSector(name);
   input.value = '';
 });
-document.getElementById('new-category-input').addEventListener('keydown', (e)=>{
+document.getElementById('new-sector-input').addEventListener('keydown', (e)=>{
   if(e.key === 'Enter'){
     e.preventDefault();
-    document.getElementById('new-category-add-btn').click();
+    document.getElementById('new-sector-add-btn').click();
   }
 });
 
@@ -1998,8 +1922,6 @@ function wireInlineCreateSelect(selectId, sentinel, promptText, createFn, fallba
 }
 wireInlineCreateSelect('task-area', '__new_area__', 'Nombre de la nueva área:', addCustomArea, 'nina');
 wireInlineCreateSelect('edit-ptask-area', '__new_area__', 'Nombre de la nueva área:', addCustomArea, 'nina');
-wireInlineCreateSelect('task-category', '__new_category__', 'Nombre del nuevo tema:', addCustomCategory, 'otro');
-wireInlineCreateSelect('edit-ptask-category', '__new_category__', 'Nombre del nuevo tema:', addCustomCategory, 'otro');
 wireInlineCreateSelect('task-person', '__new_person__', 'Nombre de la nueva persona:', addCustomPerson, viewerPerson);
 wireInlineCreateSelect('edit-ptask-person', '__new_person__', 'Nombre de la nueva persona:', addCustomPerson, '');
 wireInlineCreateSelect('task-sector', '__new_sector__', 'Nombre del nuevo sector:', addCustomSector, '');
@@ -2022,7 +1944,7 @@ wireInlineCreateSelect('edit-ptask-sector', '__new_sector__', 'Nombre del nuevo 
   document.getElementById('legacy-toggle-btn').textContent = isAdmin
     ? '⚙️ Más — agregar con todos los campos, personas, sectores, limpieza'
     : '⚙️ Más — agregar con todos los campos, ver resumen del día';
-  await peopleAndCategoryConfigReady;
+  await peopleConfigReady;
   await loadAreaConfig();
   await loadSectorConfig();
   await migrateTeamTasksIfNeeded();
@@ -2030,7 +1952,6 @@ wireInlineCreateSelect('edit-ptask-sector', '__new_sector__', 'Nombre del nuevo 
   await migrateToTasksV2IfNeeded();
   document.getElementById('task-area').innerHTML = areaSelectOptionsHtml('nina');
   document.getElementById('task-sector').innerHTML = sectorSelectOptionsHtml('');
-  document.getElementById('task-category').innerHTML = categorySelectOptionsHtml('otro');
   document.getElementById('task-repeat').innerHTML = repeatSelectOptionsHtml('none');
   renderTaskRepeatDaysPicker();
   document.getElementById('task-repeat').addEventListener('change', renderTaskRepeatDaysPicker);
@@ -2049,6 +1970,7 @@ wireInlineCreateSelect('edit-ptask-sector', '__new_sector__', 'Nombre del nuevo 
   // cambia algo (lo hagas vos u otra persona en otra pantalla).
   attachPersonalTasksListener();
   attachFabricaPendientesListener();
+  attachPedidosListener();
   setStatus('listo — se guarda solo en este dispositivo');
 })();
 
@@ -2141,7 +2063,8 @@ function renderAreaSettingsList(){
 /* ===== Sector (Fábrica / Logística / Diseño / etc — de dónde viene el pedido) ===== */
 const BASE_SECTORS = {
   fabrica:'Fábrica', logistica:'Logística', diseno:'Diseño',
-  administracion:'Administración', ventas:'Ventas', deposito:'Depósito'
+  administracion:'Administración', ventas:'Ventas', deposito:'Depósito',
+  web:'Web', redes:'Redes', marketing:'Marketing'
 };
 let customSectors = {};
 let hiddenSectorKeys = [];
@@ -2244,38 +2167,99 @@ function urgencyBadgeHtml(t){
 }
 
 /* ===== Aviso de tareas que un empleado marcó Finalizado y vos todavía no viste ===== */
-function renderFinishedBadge(){
+/* ===== Pedidos directos del equipo a Ariel + aviso unificado (🔔) =====
+   Antes solo existía el aviso de "tarea recién terminada". Ahora se suma acá mismo:
+   tareas nuevas que agregó un empleado, y pedidos directos ("necesito tal cosa").
+   Todo entra en un solo campanario para no llenar la pantalla de avisos sueltos. */
+let pedidos = [];
+let pedidosListenerAttached = false;
+function attachPedidosListener(){
+  if(pedidosListenerAttached) return;
+  pedidosListenerAttached = true;
+  db.ref('control_bynina/pedidos_v1').on('value', snap=>{
+    const val = snap.val() || {};
+    pedidos = Object.keys(val).map(id=>({...val[id], id}));
+    if(isAdmin) renderNotifyBell();
+  }, err=>{});
+}
+async function sendPedido(text){
+  const clean = text.trim();
+  if(!clean) return;
+  const id = 'pd' + Date.now() + Math.random().toString(36).slice(2,7);
+  const pedido = { id, person: viewerPerson, text: clean, ts: Date.now(), seen: false };
+  try{ await db.ref('control_bynina/pedidos_v1/' + id).set(pedido); }catch(e){}
+}
+async function dismissPedido(id){
+  try{ await db.ref('control_bynina/pedidos_v1/' + id + '/seen').set(true); }catch(e){}
+}
+function openPedidoModal(){
+  document.getElementById('pedido-text').value = '';
+  document.getElementById('pedido-modal').classList.add('open');
+  document.getElementById('pedido-text').focus();
+}
+function closePedidoModal(){
+  document.getElementById('pedido-modal').classList.remove('open');
+}
+document.getElementById('pedido-open-btn').addEventListener('click', openPedidoModal);
+document.getElementById('pedido-cancel').addEventListener('click', closePedidoModal);
+document.getElementById('pedido-send').addEventListener('click', async ()=>{
+  const text = document.getElementById('pedido-text').value;
+  if(!text.trim()) return;
+  const btn = document.getElementById('pedido-send');
+  btn.disabled = true;
+  await sendPedido(text);
+  btn.disabled = false;
+  closePedidoModal();
+  setStatus('✓ le avisamos a Ariel');
+});
+document.getElementById('pedido-modal').addEventListener('click', (e)=>{
+  if(e.target.id === 'pedido-modal') closePedidoModal();
+});
+if(!isAdmin) document.getElementById('pedido-open-btn').style.display = 'inline-block';
+
+function renderNotifyBell(){
   const wrap = document.getElementById('finished-notify-wrap');
   if(!wrap) return;
   if(!isAdmin){ wrap.style.display = 'none'; return; }
-  const finished = (personalTasks||[]).filter(t=>t.finishedUnseen);
+  const finished = (personalTasks||[]).filter(t=>t.finishedUnseen)
+    .map(t=>({ kind:'finalizada', ts:t.finishedAt||0, id:t.id,
+      label:`✅ ${PEOPLE[t.assignedPerson]||t.assignedPerson||''} terminó: ${t.text}` }));
+  const nuevas = (personalTasks||[]).filter(t=>t.newUnseen)
+    .map(t=>({ kind:'nueva', ts:t.createdAt||0, id:t.id,
+      label:`🆕 ${PEOPLE[t.createdBy]||t.createdBy||''} agregó: ${t.text}` }));
+  const pedidosPend = (pedidos||[]).filter(p=>!p.seen)
+    .map(p=>({ kind:'pedido', ts:p.ts||0, id:p.id,
+      label:`📨 ${PEOPLE[p.person]||p.person||''} te pidió: ${p.text}` }));
+  const all = [...finished, ...nuevas, ...pedidosPend];
   const btn = document.getElementById('finished-badge-btn');
   const panel = document.getElementById('finished-panel');
-  if(!finished.length){
+  if(!all.length){
     wrap.style.display = 'none';
     panel.classList.remove('open');
     panel.innerHTML = '';
     return;
   }
   wrap.style.display = 'block';
-  btn.textContent = `✅ ${finished.length} tarea${finished.length>1?'s':''} recién terminada${finished.length>1?'s':''} — tocá para ver`;
-  panel.innerHTML = finished.slice().sort((a,b)=>(b.finishedAt||0)-(a.finishedAt||0)).map(t=>{
-    const person = PEOPLE[t.assignedPerson] || t.assignedPerson || '';
-    const sector = t.sector ? (SECTORS[t.sector]||t.sector) : '';
-    return `
-      <div class="finished-item">
-        <span>${sector?`<b>${escapeHtml(sector)}</b> — `:''}${escapeHtml(person)}: ${escapeHtml(t.text)}</span>
-        <button class="finished-item-dismiss" data-id="${t.id}">✓ Visto</button>
-      </div>
-    `;
-  }).join('');
+  btn.textContent = `🔔 ${all.length} aviso${all.length>1?'s':''} nuevo${all.length>1?'s':''} — tocá para ver`;
+  panel.innerHTML = all.sort((a,b)=>b.ts-a.ts).map(it=>`
+    <div class="finished-item">
+      <span>${escapeHtml(it.label)}</span>
+      <button class="finished-item-dismiss" data-kind="${it.kind}" data-id="${it.id}">✓ Visto</button>
+    </div>
+  `).join('');
   panel.querySelectorAll('.finished-item-dismiss').forEach(b=>{
     b.addEventListener('click', async (e)=>{
       e.stopPropagation();
-      const t = personalTasks.find(x=>x.id===b.dataset.id);
+      const {kind,id} = b.dataset;
+      if(kind === 'pedido'){
+        await dismissPedido(id);
+        return;
+      }
+      const t = personalTasks.find(x=>x.id===id);
       if(!t) return;
-      t.finishedUnseen = false;
-      renderFinishedBadge();
+      if(kind==='finalizada') t.finishedUnseen = false;
+      if(kind==='nueva') t.newUnseen = false;
+      renderNotifyBell();
       await saveOneTask(t);
     });
   });
@@ -2765,6 +2749,7 @@ function openQuickAddModal(presetPerson, presetSector){
   document.getElementById('qa-person').value = presetPerson || viewerPerson;
   document.getElementById('qa-person').disabled = !isAdmin;
   document.getElementById('qa-due').value = '';
+  document.getElementById('qa-time').value = '';
   document.getElementById('qa-text').value = '';
   document.getElementById('quick-add-modal').classList.add('open');
   document.getElementById('qa-text').focus();
@@ -2781,15 +2766,15 @@ async function saveQuickAdd(){
     id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
     area: document.getElementById('qa-area').value,
     sector: document.getElementById('qa-sector').value || '',
-    category: 'otro',
     assignedPerson: document.getElementById('qa-person').value,
     text: text,
     dueDate: document.getElementById('qa-due').value || '',
-    time: '',
+    time: document.getElementById('qa-time').value || '',
     ts: Date.now(),
     resolved: false,
     repeat: 'none'
   };
+  if(!isAdmin){ newTask.newUnseen = true; newTask.createdBy = viewerPerson; newTask.createdAt = Date.now(); }
   personalTasks.push(newTask);
   closeQuickAddModal();
   renderAllTaskViews();
@@ -3060,7 +3045,7 @@ function attachPersonalTasksListener(){
     if(isAdmin){
       renderMidiaPersonFilter();
       renderMidiaPersonTasks();
-      renderFinishedBadge();
+      renderNotifyBell();
       renderPanorama();
     }
   }, err=>{
@@ -3119,7 +3104,7 @@ function personalTaskHtml(t){
   const responsableLabel = responsableName ? `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(responsableName)}</span>` : '';
   const statusVal = getTaskStatusForDate(t, todayKey());
   const statusSelectHtml = `<select class="task-status-select ptask-status-select" data-id="${t.id}" style="color:${TASK_STATUS_COLOR[statusVal]}">${taskStatusSelectHtml(t, todayKey())}</select>`;
-  const catColor = colorForCategory(t.category || 'otro');
+  const catColor = colorForSector(t.sector);
   const importantBtn = `<button class="edit-btn ptask-important ${t.important?'active':''}" data-id="${t.id}" title="${t.important?'Sacar importante':'Marcar importante'}">${t.important?'⭐':'☆'}</button>`;
   return `
     <div class="ticket ticket-draggable ${done?'resolved':''} ${responsableLabel?'shared-ticket':''} ${t.important?'important-ticket':''}" draggable="true" data-id="${t.id}" style="border-left:4px solid ${catColor};">
@@ -3128,7 +3113,6 @@ function personalTaskHtml(t){
         <div class="ticket-meta">
           <span class="tag ${t.area}">${AREAS[t.area] || t.area}</span>
           ${sectorTagHtml(t)}
-          ${categoryTagHtml(t)}
           ${responsableLabel}
           ${timeLabel}
           ${!done ? urgencyBadgeHtml(t) : ''}
@@ -3396,7 +3380,6 @@ async function addPersonalTask(){
   const textEl = document.getElementById('task-text-input');
   const areaEl = document.getElementById('task-area');
   const sectorEl = document.getElementById('task-sector');
-  const categoryEl = document.getElementById('task-category');
   const personEl = document.getElementById('task-person');
   const dueEl = document.getElementById('task-due-date');
   const timeEl = document.getElementById('task-time-input');
@@ -3417,7 +3400,6 @@ async function addPersonalTask(){
     id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
     area: areaEl.value,
     sector: sectorEl.value || '',
-    category: categoryEl.value || 'otro',
     assignedPerson: personEl.value,
     text: text,
     dueDate: dueEl.value || '',
@@ -3427,6 +3409,7 @@ async function addPersonalTask(){
     repeat: repeatEl.value || 'none'
   };
   if(newTask.repeat === 'custom') newTask.repeatDays = [...taskRepeatDaysDraft];
+  if(!isAdmin){ newTask.newUnseen = true; newTask.createdBy = viewerPerson; newTask.createdAt = Date.now(); }
   personalTasks.push(newTask);
   textEl.value = '';
   timeEl.value = '';
@@ -3459,7 +3442,6 @@ function openEditPersonalTask(id){
   const sectorStillVisible = !t.sector || visibleSectorEntries().some(([k])=>k===t.sector);
   document.getElementById('edit-ptask-sector').innerHTML = sectorSelectOptionsHtml(t.sector || '') +
     (sectorStillVisible ? '' : `<option value="${t.sector}" selected>${SECTORS[t.sector]||t.sector}</option>`);
-  document.getElementById('edit-ptask-category').innerHTML = categorySelectOptionsHtml(t.category || 'otro');
   document.getElementById('edit-ptask-due').value = t.dueDate || '';
   document.getElementById('edit-ptask-time').value = t.time || '';
   document.getElementById('edit-ptask-text').value = t.text;
@@ -3506,7 +3488,6 @@ async function saveEditPersonalTask(){
   t.text = newText;
   t.area = document.getElementById('edit-ptask-area').value;
   t.sector = document.getElementById('edit-ptask-sector').value || '';
-  t.category = document.getElementById('edit-ptask-category').value || 'otro';
   t.dueDate = document.getElementById('edit-ptask-due').value || '';
   t.time = document.getElementById('edit-ptask-time').value || '';
   const newRepeat = document.getElementById('edit-ptask-repeat').value || 'none';
@@ -3528,6 +3509,17 @@ async function saveEditPersonalTask(){
 
 document.getElementById('edit-ptask-cancel').addEventListener('click', closeEditPersonalTask);
 document.getElementById('edit-ptask-save').addEventListener('click', saveEditPersonalTask);
+document.getElementById('edit-ptask-delete').addEventListener('click', async ()=>{
+  const t = personalTasks.find(x=>x.id===editingPersonalTaskId);
+  if(!t) return;
+  if(!confirm(`¿Eliminar la tarea "${t.text}"? No se puede deshacer.`)) return;
+  const id = editingPersonalTaskId;
+  personalTasks = personalTasks.filter(x=>x.id!==id);
+  closeEditPersonalTask();
+  renderAllTaskViews();
+  await deleteOneTaskRemote(id);
+  setStatus('tarea eliminada');
+});
 document.getElementById('edit-ptask-modal').addEventListener('click', (e)=>{
   if(e.target.id === 'edit-ptask-modal') closeEditPersonalTask();
 });
@@ -3550,7 +3542,7 @@ let dragSummaryNoDateId = null;
 function renderDaySummary(){
   renderDatedSummary();
   renderNoDateSummary();
-  renderFinishedBadge();
+  renderNotifyBell();
 }
 
 // Tareas del viewer que aplican al día que se está mirando (hoy o el navegado), sin contar
