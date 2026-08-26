@@ -1064,6 +1064,10 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
       <button id="task-add-btn">Agregar</button>
     </div>
     <div class="weekday-picker" id="task-repeat-days" style="display:none;"></div>
+    <div id="task-depends-wrap" style="display:none;align-items:center;gap:6px;margin-top:6px;">
+      <input type="checkbox" id="task-depends" style="width:auto;">
+      <label for="task-depends" style="margin:0;font-size:13px;">⏳ Depende de que Ariel haga algo primero</label>
+    </div>
   </div>
 
   <div id="admin-only-top">
@@ -1195,6 +1199,10 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
       <label for="qa-text">Tarea</label>
       <textarea id="qa-text" placeholder="Qué hay que hacer..."></textarea>
     </div>
+    <div class="modal-field" id="qa-depends-wrap" style="display:none;flex-direction:row;align-items:center;gap:6px;">
+      <input type="checkbox" id="qa-depends" style="width:auto;">
+      <label for="qa-depends" style="margin:0;">⏳ Depende de que Ariel haga algo primero</label>
+    </div>
     <div class="modal-footer">
       <button class="modal-cancel-btn" id="qa-cancel">Cancelar</button>
       <button id="qa-save">Agregar</button>
@@ -1235,6 +1243,10 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
     <div class="modal-field">
       <label for="edit-ptask-text">Tarea</label>
       <textarea id="edit-ptask-text"></textarea>
+    </div>
+    <div class="modal-field" style="display:flex;flex-direction:row;align-items:center;gap:6px;">
+      <input type="checkbox" id="edit-ptask-depends" style="width:auto;">
+      <label for="edit-ptask-depends" style="margin:0;">⏳ Depende de que Ariel haga algo primero</label>
     </div>
     <div class="modal-row">
       <div class="modal-field">
@@ -2216,6 +2228,10 @@ document.getElementById('pedido-modal').addEventListener('click', (e)=>{
   if(e.target.id === 'pedido-modal') closePedidoModal();
 });
 if(!isAdmin) document.getElementById('pedido-open-btn').style.display = 'inline-block';
+if(!isAdmin){
+  document.getElementById('qa-depends-wrap').style.display = 'flex';
+  document.getElementById('task-depends-wrap').style.display = 'flex';
+}
 
 function renderNotifyBell(){
   const wrap = document.getElementById('finished-notify-wrap');
@@ -2227,10 +2243,13 @@ function renderNotifyBell(){
   const nuevas = (personalTasks||[]).filter(t=>t.newUnseen)
     .map(t=>({ kind:'nueva', ts:t.createdAt||0, id:t.id,
       label:`🆕 ${PEOPLE[t.createdBy]||t.createdBy||''} agregó: ${t.text}` }));
+  const dependen = (personalTasks||[]).filter(t=>t.dependsUnseen)
+    .map(t=>({ kind:'depende', ts:t.dependsAt||0, id:t.id,
+      label:`⏳ ${PEOPLE[t.createdBy]||t.createdBy||''} — depende de vos: ${t.text}` }));
   const pedidosPend = (pedidos||[]).filter(p=>!p.seen)
     .map(p=>({ kind:'pedido', ts:p.ts||0, id:p.id,
       label:`📨 ${PEOPLE[p.person]||p.person||''} te pidió: ${p.text}` }));
-  const all = [...finished, ...nuevas, ...pedidosPend];
+  const all = [...finished, ...nuevas, ...dependen, ...pedidosPend];
   const btn = document.getElementById('finished-badge-btn');
   const panel = document.getElementById('finished-panel');
   if(!all.length){
@@ -2259,6 +2278,7 @@ function renderNotifyBell(){
       if(!t) return;
       if(kind==='finalizada') t.finishedUnseen = false;
       if(kind==='nueva') t.newUnseen = false;
+      if(kind==='depende') t.dependsUnseen = false;
       renderNotifyBell();
       await saveOneTask(t);
     });
@@ -2344,10 +2364,11 @@ function panoramaCardHtml(t){
   const dueTxt = t.dueDate ? fmtDue(t.dueDate) : '';
   const timeTxt = t.time ? `<span class="pdue-pill">🕐 ${escapeHtml(t.time)}</span>` : '';
   const draggableAttr = taskRepeatType(t) === 'none' ? 'draggable="true"' : '';
+  const dependsChip = t.dependsOnAriel ? `<span class="plabel-chip" style="background:#c98a1a">⏳ Depende de Ariel</span>` : '';
   return `
     <div class="pcard" data-id="${t.id}" ${draggableAttr}>
       <div class="pcard-check panorama-check" data-id="${t.id}" title="Marcar como terminada"></div>
-      <div class="pcard-labels"><span class="plabel-chip" style="background:${initialsColorFor(sectorLabel)}">${escapeHtml(sectorLabel)}</span></div>
+      <div class="pcard-labels"><span class="plabel-chip" style="background:${initialsColorFor(sectorLabel)}">${escapeHtml(sectorLabel)}</span>${dependsChip}</div>
       <div class="pcard-title">${escapeHtml(t.text)}</div>
       <div class="pcard-footer">
         <div style="display:flex;gap:4px;flex-wrap:wrap;">
@@ -2751,6 +2772,7 @@ function openQuickAddModal(presetPerson, presetSector){
   document.getElementById('qa-due').value = '';
   document.getElementById('qa-time').value = '';
   document.getElementById('qa-text').value = '';
+  document.getElementById('qa-depends').checked = false;
   document.getElementById('quick-add-modal').classList.add('open');
   document.getElementById('qa-text').focus();
 }
@@ -2774,7 +2796,17 @@ async function saveQuickAdd(){
     resolved: false,
     repeat: 'none'
   };
-  if(!isAdmin){ newTask.newUnseen = true; newTask.createdBy = viewerPerson; newTask.createdAt = Date.now(); }
+  if(!isAdmin){
+    newTask.createdBy = viewerPerson;
+    newTask.createdAt = Date.now();
+    if(document.getElementById('qa-depends').checked){
+      newTask.dependsOnAriel = true;
+      newTask.dependsUnseen = true;
+      newTask.dependsAt = Date.now();
+    } else {
+      newTask.newUnseen = true;
+    }
+  }
   personalTasks.push(newTask);
   closeQuickAddModal();
   renderAllTaskViews();
@@ -3105,6 +3137,7 @@ function personalTaskHtml(t){
   const statusVal = getTaskStatusForDate(t, todayKey());
   const statusSelectHtml = `<select class="task-status-select ptask-status-select" data-id="${t.id}" style="color:${TASK_STATUS_COLOR[statusVal]}">${taskStatusSelectHtml(t, todayKey())}</select>`;
   const catColor = colorForSector(t.sector);
+  const dependsBadge = t.dependsOnAriel ? `<span class="due-badge" style="background:#fde68a;color:#7a4a00">⏳ Depende de Ariel</span>` : '';
   const importantBtn = `<button class="edit-btn ptask-important ${t.important?'active':''}" data-id="${t.id}" title="${t.important?'Sacar importante':'Marcar importante'}">${t.important?'⭐':'☆'}</button>`;
   return `
     <div class="ticket ticket-draggable ${done?'resolved':''} ${responsableLabel?'shared-ticket':''} ${t.important?'important-ticket':''}" draggable="true" data-id="${t.id}" style="border-left:4px solid ${catColor};">
@@ -3113,6 +3146,7 @@ function personalTaskHtml(t){
         <div class="ticket-meta">
           <span class="tag ${t.area}">${AREAS[t.area] || t.area}</span>
           ${sectorTagHtml(t)}
+          ${dependsBadge}
           ${responsableLabel}
           ${timeLabel}
           ${!done ? urgencyBadgeHtml(t) : ''}
@@ -3409,13 +3443,25 @@ async function addPersonalTask(){
     repeat: repeatEl.value || 'none'
   };
   if(newTask.repeat === 'custom') newTask.repeatDays = [...taskRepeatDaysDraft];
-  if(!isAdmin){ newTask.newUnseen = true; newTask.createdBy = viewerPerson; newTask.createdAt = Date.now(); }
+  if(!isAdmin){
+    newTask.createdBy = viewerPerson;
+    newTask.createdAt = Date.now();
+    if(document.getElementById('task-depends').checked){
+      newTask.dependsOnAriel = true;
+      newTask.dependsUnseen = true;
+      newTask.dependsAt = Date.now();
+    } else {
+      newTask.newUnseen = true;
+    }
+  }
   personalTasks.push(newTask);
   textEl.value = '';
   timeEl.value = '';
   repeatEl.value = 'none';
   taskRepeatDaysDraft = [];
   renderTaskRepeatDaysPicker();
+  const dependsEl = document.getElementById('task-depends');
+  if(dependsEl) dependsEl.checked = false;
   renderAllTaskViews();
   await saveOneTask(newTask);
   btn.disabled = false;
@@ -3454,6 +3500,7 @@ function openEditPersonalTask(id){
   personSel.value = t.assignedPerson || '';
   personSel.disabled = !isAdmin;
   document.getElementById('edit-ptask-person-field').style.opacity = !isAdmin ? '0.5' : '1';
+  document.getElementById('edit-ptask-depends').checked = !!t.dependsOnAriel;
   document.getElementById('edit-ptask-modal').classList.add('open');
 }
 
@@ -3501,6 +3548,13 @@ async function saveEditPersonalTask(){
   setTaskStatusForDate(t, todayKey(), document.getElementById('edit-ptask-status').value);
   if(isAdmin){
     t.assignedPerson = document.getElementById('edit-ptask-person').value || '';
+  }
+  const prevDepends = !!t.dependsOnAriel;
+  const newDepends = document.getElementById('edit-ptask-depends').checked;
+  t.dependsOnAriel = newDepends;
+  if(newDepends && !prevDepends && !isAdmin){
+    t.dependsUnseen = true;
+    t.dependsAt = Date.now();
   }
   closeEditPersonalTask();
   renderAllTaskViews();
