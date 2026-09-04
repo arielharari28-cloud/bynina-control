@@ -1568,8 +1568,11 @@ function getPersonaParam(){
   return (p && PEOPLE[p]) ? p : null;
 }
 const employeePersona = getPersonaParam();
-const isAdmin = !employeePersona;
+const isAdmin = !employeePersona || employeePersona === 'stef';
 const viewerPerson = employeePersona || 'ariel';
+// Stef ve el tablero completo (como admin) pero las tareas de Ariel quedan afuera de su vista;
+// igual puede elegir "Ariel" como responsable al crear/editar una tarea para otra persona.
+const isStefLimitedAdmin = employeePersona === 'stef';
 
 function todayKey(){
   const d = new Date();
@@ -1689,7 +1692,7 @@ let midiaFilterPerson = '';
 function renderMidiaPersonFilter(){
   const el = document.getElementById('midia-person-filter');
   if(!el) return;
-  const keys = Object.keys(ACTIVE_PEOPLE).filter(k=>k!=='general');
+  const keys = Object.keys(ACTIVE_PEOPLE).filter(k=>k!=='general' && !(isStefLimitedAdmin && k==='ariel'));
   el.innerHTML = keys.map(k=>{
     return `<div class="chip ${midiaFilterPerson===k?'active':''}" data-key="${k}">${PEOPLE[k]}</div>`;
   }).join('');
@@ -1945,6 +1948,8 @@ wireInlineCreateSelect('edit-ptask-sector', '__new_sector__', 'Nombre del nuevo 
   if(!isAdmin){
     document.getElementById('admin-only-top').style.display = 'none';
     document.getElementById('admin-only-midia-person').style.display = 'none';
+  }
+  if(employeePersona){
     document.getElementById('app-title').textContent = `By Nina — Hola, ${PEOPLE[employeePersona] || employeePersona}`;
   }
   // Ahora que existe el tablero (Panorama para vos, versión simple para el equipo),
@@ -2324,6 +2329,7 @@ function personalTasksPendingForPanorama(){
   const todayStr = todayKey();
   return (personalTasks||[]).filter(t=>{
     if(!isAdmin && t.assignedPerson !== viewerPerson) return false;
+    if(isStefLimitedAdmin && t.assignedPerson === 'ariel') return false;
     if(taskRepeatType(t) !== 'none') return !isTaskDoneForDate(t, todayStr);
     return !t.resolved;
   });
@@ -2397,6 +2403,7 @@ let panoramaView = 'urgencia';
 let panoramaSelectedPeople = null;
 
 function panoramaPersonIncluded(key){
+  if(isStefLimitedAdmin && key==='ariel') return false;
   if(!panoramaSelectedPeople) return true;
   return panoramaSelectedPeople.has(key);
 }
@@ -2422,7 +2429,7 @@ function togglePanoramaPerson(key){
 function renderPanoramaPeopleFilter(){
   const el = document.getElementById('panorama-people-filter');
   if(!el) return;
-  const keys = Object.keys(ACTIVE_PEOPLE).filter(k=>k!=='general');
+  const keys = Object.keys(ACTIVE_PEOPLE).filter(k=>k!=='general' && !(isStefLimitedAdmin && k==='ariel'));
   const allActive = !panoramaSelectedPeople;
   el.innerHTML = `<button class="person-chip ${allActive?'active':''}" data-key="__all__">Todos</button>` +
     keys.map(k=>`<button class="person-chip ${(!allActive && panoramaSelectedPeople.has(k))?'active':''}" data-key="${k}">${escapeHtml(ACTIVE_PEOPLE[k])}</button>`).join('');
@@ -3377,6 +3384,7 @@ function renderPersonalTasks(){
   else if(taskFilter === 'sinresp') filtered = personalTasks.filter(t=>!personalTaskHasResponsible(t));
   else filtered = personalTasks.filter(t=>t.area===taskFilter);
   if(!isAdmin) filtered = filtered.filter(t=>t.assignedPerson===viewerPerson);
+  else if(isStefLimitedAdmin) filtered = filtered.filter(t=>t.assignedPerson!=='ariel');
   const todayStr = todayKey();
   if(!filtered.length){
     el.innerHTML = '<div class="empty">No hay tareas acá.</div>';
