@@ -1064,6 +1064,10 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
       <button id="task-add-btn">Agregar</button>
     </div>
     <div class="weekday-picker" id="task-repeat-days" style="display:none;"></div>
+    <div id="task-shared-wrap" style="margin-top:6px;">
+      <div class="capture-label">👥 Compartir también con (opcional — ej: reunión de varios)</div>
+      <div class="weekday-picker" id="task-shared-picker"></div>
+    </div>
     <div id="task-depends-wrap" style="display:none;align-items:center;gap:6px;margin-top:6px;">
       <input type="checkbox" id="task-depends" style="width:auto;">
       <label for="task-depends" style="margin:0;font-size:13px;">⏳ Depende de que Ariel haga algo primero</label>
@@ -1159,6 +1163,13 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
       <label for="pedido-text">Qué necesitás</label>
       <textarea id="pedido-text" placeholder="Contale a Ariel qué necesitás..."></textarea>
     </div>
+    <div class="modal-field">
+      <label for="pedido-date">¿Es para pedir una reunión? Elegí fecha y hora (opcional)</label>
+      <div style="display:flex;gap:8px;">
+        <input type="date" id="pedido-date" style="flex:1;">
+        <input type="time" id="pedido-time" style="flex:1;">
+      </div>
+    </div>
     <div class="modal-footer">
       <button class="modal-cancel-btn" id="pedido-cancel">Cancelar</button>
       <button id="pedido-send">Enviar</button>
@@ -1198,6 +1209,10 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
     <div class="modal-field">
       <label for="qa-text">Tarea</label>
       <textarea id="qa-text" placeholder="Qué hay que hacer..."></textarea>
+    </div>
+    <div class="modal-field">
+      <label>👥 Compartir también con (opcional — ej: reunión de varios)</label>
+      <div class="weekday-picker" id="qa-shared-picker"></div>
     </div>
     <div class="modal-field" id="qa-depends-wrap" style="display:none;flex-direction:row;align-items:center;gap:6px;">
       <input type="checkbox" id="qa-depends" style="width:auto;">
@@ -1243,6 +1258,10 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
     <div class="modal-field">
       <label for="edit-ptask-text">Tarea</label>
       <textarea id="edit-ptask-text"></textarea>
+    </div>
+    <div class="modal-field">
+      <label>👥 Compartir también con (opcional — ej: reunión de varios)</label>
+      <div class="weekday-picker" id="edit-shared-picker"></div>
     </div>
     <div class="modal-field" style="display:flex;flex-direction:row;align-items:center;gap:6px;">
       <input type="checkbox" id="edit-ptask-depends" style="width:auto;">
@@ -1480,10 +1499,77 @@ function renderEditRepeatDaysPicker(){
   if(isCustom) el.innerHTML = weekdayPickerHtml('edit-ptask-repeat-days', editRepeatDaysDraft);
 }
 
+// ===== Compartir tarea con más personas (ej: reunión de varios) =====
+// Reusa el mismo estilo visual de chips que el selector de días, pero para personas.
+// El responsable principal (elegido en el select de al lado) no aparece como opción acá
+// porque ya es el dueño de la tarea; se recalcula solo si cambiás el responsable.
+function sharedPickerHtml(containerId, selectedKeys, excludeKey){
+  const sel = selectedKeys || [];
+  return Object.keys(ACTIVE_PEOPLE).filter(k=>k!=='general' && k!==excludeKey).map(k=>
+    `<button type="button" class="weekday-btn ${sel.includes(k)?'active':''}" data-shared-container="${containerId}" data-person="${k}">${PEOPLE[k]}</button>`
+  ).join('');
+}
+let taskSharedDraft = [];
+function renderTaskSharedPicker(){
+  const el = document.getElementById('task-shared-picker');
+  if(!el) return;
+  const respSel = document.getElementById('task-person').value;
+  taskSharedDraft = taskSharedDraft.filter(k=>k!==respSel);
+  el.innerHTML = sharedPickerHtml('task-shared-picker', taskSharedDraft, respSel);
+}
+let qaSharedDraft = [];
+function renderQaSharedPicker(){
+  const el = document.getElementById('qa-shared-picker');
+  if(!el) return;
+  const respSel = document.getElementById('qa-person').value;
+  qaSharedDraft = qaSharedDraft.filter(k=>k!==respSel);
+  el.innerHTML = sharedPickerHtml('qa-shared-picker', qaSharedDraft, respSel);
+}
+let editSharedDraft = [];
+function renderEditSharedPicker(){
+  const el = document.getElementById('edit-shared-picker');
+  if(!el) return;
+  const respSel = document.getElementById('edit-ptask-person').value;
+  editSharedDraft = editSharedDraft.filter(k=>k!==respSel);
+  el.innerHTML = sharedPickerHtml('edit-shared-picker', editSharedDraft, respSel);
+}
+// Un solo listener delegado para los 3 pickers (evita repetir el mismo código 3 veces).
+function toggleSharedDraft(containerId, personKey){
+  const draftByContainer = {
+    'task-shared-picker': [taskSharedDraft, renderTaskSharedPicker],
+    'qa-shared-picker': [qaSharedDraft, renderQaSharedPicker],
+    'edit-shared-picker': [editSharedDraft, renderEditSharedPicker]
+  };
+  const entry = draftByContainer[containerId];
+  if(!entry) return;
+  const [draft, renderFn] = entry;
+  const idx = draft.indexOf(personKey);
+  if(idx === -1) draft.push(personKey); else draft.splice(idx,1);
+  renderFn();
+}
+document.addEventListener('click', (e)=>{
+  const btn = e.target.closest('[data-shared-container]');
+  if(!btn) return;
+  toggleSharedDraft(btn.dataset.sharedContainer, btn.dataset.person);
+});
+
 // Compatibilidad: tareas viejas guardaron repeatDaily:true en vez de repeat:'daily'.
 function taskRepeatType(t){
   if(t.repeat) return t.repeat;
   return t.repeatDaily ? 'daily' : 'none';
+}
+
+// Tareas compartidas: además del responsable principal (assignedPerson), pueden tener
+// gente invitada (t.sharedWith, array de keys). Con esto una tarea "le corresponde" tanto
+// al responsable como a cada invitado — se usa para que a los invitados también les
+// aparezca en su propio tablero, aunque la columna "por responsable" solo la muestre
+// una vez, en la del responsable principal.
+function taskInvolvesPerson(t, personKey){
+  if(t.assignedPerson === personKey) return true;
+  return !!(t.sharedWith && t.sharedWith.includes(personKey));
+}
+function sharedWithNames(t){
+  return (t.sharedWith||[]).map(k=>PEOPLE[k]||k).filter(Boolean);
 }
 
 function daysBetweenKeys(aStr, bStr){
@@ -1757,6 +1843,27 @@ function isOverdue(dueStr, resolved){
   return dueStr < today;
 }
 
+// A diferencia de isOverdue (que solo mira si ya pasó el DÍA), esta chequea si ya pasó
+// el HORARIO puntual de hoy — para que una tarea de hoy con hora vencida se trate como
+// vencida en el tablero, sin esperar a que cambie de día. Solo aplica a tareas de una
+// vez (sin repetición) con fecha asignada. No dispara avisos ni escribe nada; es puro
+// cálculo visual, se recalcula solo cada vez que se renderiza la pantalla.
+function taskOverdueNow(t){
+  if(taskRepeatType(t) !== 'none') return false;
+  if(!t.dueDate) return false;
+  if(getTaskStatusForDate(t, t.dueDate) === 'finalizado') return false;
+  const today = todayKey();
+  if(t.dueDate < today) return true;
+  if(t.dueDate === today && t.time){
+    const [hh, mm] = t.time.split(':').map(Number);
+    if(Number.isNaN(hh)) return false;
+    const dueMoment = new Date();
+    dueMoment.setHours(hh, mm||0, 0, 0);
+    return Date.now() > dueMoment.getTime();
+  }
+  return false;
+}
+
 function repeatBadgeHtml(t){
   const type = taskRepeatType(t);
   if(type === 'none') return null;
@@ -1982,6 +2089,7 @@ wireInlineCreateSelect('edit-ptask-sector', '__new_sector__', 'Nombre del nuevo 
   });
   renderDateHeader();
   populateTaskPersonSelect();
+  renderTaskSharedPicker();
   // A partir de acá, personalTasks se mantiene sincronizado en vivo con Firebase:
   // este listener se dispara ahora con la primera carga, y de nuevo cada vez que
   // cambia algo (lo hagas vos u otra persona en otra pantalla).
@@ -2199,18 +2307,46 @@ function attachPedidosListener(){
     if(isAdmin) renderNotifyBell();
   }, err=>{});
 }
-async function sendPedido(text){
+async function sendPedido(text, date, time){
   const clean = text.trim();
   if(!clean) return;
   const id = 'pd' + Date.now() + Math.random().toString(36).slice(2,7);
-  const pedido = { id, person: viewerPerson, text: clean, ts: Date.now(), seen: false };
+  const pedido = { id, person: viewerPerson, text: clean, ts: Date.now(), seen: false, status: 'pendiente' };
+  if(date) pedido.proposedDate = date;
+  if(time) pedido.proposedTime = time;
   try{ await db.ref('control_bynina/pedidos_v1/' + id).set(pedido); }catch(e){}
 }
-async function dismissPedido(id){
-  try{ await db.ref('control_bynina/pedidos_v1/' + id + '/seen').set(true); }catch(e){}
+// Aprobar o rechazar un pedido del equipo. Si el pedido traía fecha/hora propuesta
+// (pidió una reunión) y vos lo aprobás, se crea directo una tarea tuya con esa fecha
+// y hora, para que quede agendada en tu propio tablero sin tener que cargarla de nuevo.
+async function respondPedido(id, decision){
+  const p = pedidos.find(x=>x.id===id);
+  if(!p) return;
+  if(decision === 'aprobado' && p.proposedDate){
+    const newTask = {
+      id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
+      area: 'personal',
+      sector: '',
+      assignedPerson: 'ariel',
+      text: `📅 Reunión con ${PEOPLE[p.person]||p.person}: ${p.text}`,
+      dueDate: p.proposedDate,
+      time: p.proposedTime || '',
+      ts: Date.now(),
+      resolved: false,
+      repeat: 'none',
+      createdBy: p.person,
+      createdAt: Date.now()
+    };
+    personalTasks.push(newTask);
+    renderAllTaskViews();
+    await saveOneTask(newTask);
+  }
+  try{ await db.ref('control_bynina/pedidos_v1/' + id).update({ status: decision, seen: true }); }catch(e){}
 }
 function openPedidoModal(){
   document.getElementById('pedido-text').value = '';
+  document.getElementById('pedido-date').value = '';
+  document.getElementById('pedido-time').value = '';
   document.getElementById('pedido-modal').classList.add('open');
   document.getElementById('pedido-text').focus();
 }
@@ -2222,9 +2358,11 @@ document.getElementById('pedido-cancel').addEventListener('click', closePedidoMo
 document.getElementById('pedido-send').addEventListener('click', async ()=>{
   const text = document.getElementById('pedido-text').value;
   if(!text.trim()) return;
+  const date = document.getElementById('pedido-date').value;
+  const time = document.getElementById('pedido-time').value;
   const btn = document.getElementById('pedido-send');
   btn.disabled = true;
-  await sendPedido(text);
+  await sendPedido(text, date, time);
   btn.disabled = false;
   closePedidoModal();
   setStatus('✓ le avisamos a Ariel');
@@ -2253,7 +2391,7 @@ function renderNotifyBell(){
       label:`⏳ ${PEOPLE[t.createdBy]||t.createdBy||''} — depende de vos: ${t.text}` }));
   const pedidosPend = (pedidos||[]).filter(p=>!p.seen)
     .map(p=>({ kind:'pedido', ts:p.ts||0, id:p.id,
-      label:`📨 ${PEOPLE[p.person]||p.person||''} te pidió: ${p.text}` }));
+      label:`📨 ${PEOPLE[p.person]||p.person||''} te pidió${p.proposedDate?` (📅 reunión ${fmtDue(p.proposedDate)}${p.proposedTime?' '+p.proposedTime:''})`:''}: ${p.text}` }));
   const all = [...finished, ...nuevas, ...dependen, ...pedidosPend];
   const btn = document.getElementById('finished-badge-btn');
   const panel = document.getElementById('finished-panel');
@@ -2265,20 +2403,41 @@ function renderNotifyBell(){
   }
   wrap.style.display = 'block';
   btn.textContent = `🔔 ${all.length} aviso${all.length>1?'s':''} nuevo${all.length>1?'s':''} — tocá para ver`;
-  panel.innerHTML = all.sort((a,b)=>b.ts-a.ts).map(it=>`
+  panel.innerHTML = all.sort((a,b)=>b.ts-a.ts).map(it=>{
+    if(it.kind === 'pedido'){
+      return `
+      <div class="finished-item">
+        <span>${escapeHtml(it.label)}</span>
+        <div style="display:flex;gap:6px;">
+          <button class="finished-item-approve" data-id="${it.id}" style="background:var(--green-soft,#dcece2);color:#2f6b4f;">✅ Aprobar</button>
+          <button class="finished-item-reject" data-id="${it.id}" style="background:var(--red-soft,#f2ded9);color:#7a3230;">✖ Rechazar</button>
+        </div>
+      </div>`;
+    }
+    return `
     <div class="finished-item">
       <span>${escapeHtml(it.label)}</span>
       <button class="finished-item-dismiss" data-kind="${it.kind}" data-id="${it.id}">✓ Visto</button>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
+  panel.querySelectorAll('.finished-item-approve').forEach(b=>{
+    b.addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      b.disabled = true;
+      await respondPedido(b.dataset.id, 'aprobado');
+    });
+  });
+  panel.querySelectorAll('.finished-item-reject').forEach(b=>{
+    b.addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      b.disabled = true;
+      await respondPedido(b.dataset.id, 'rechazado');
+    });
+  });
   panel.querySelectorAll('.finished-item-dismiss').forEach(b=>{
     b.addEventListener('click', async (e)=>{
       e.stopPropagation();
       const {kind,id} = b.dataset;
-      if(kind === 'pedido'){
-        await dismissPedido(id);
-        return;
-      }
       const t = personalTasks.find(x=>x.id===id);
       if(!t) return;
       if(kind==='finalizada') t.finishedUnseen = false;
@@ -2317,8 +2476,10 @@ function urgencyKeyOf(t){
   // "Sin apuro": son, por definición, tareas vigentes de hoy.
   if(taskRepeatType(t) !== 'none') return 'hoy';
   if(!t.dueDate) return 'normal';
+  // Si ya pasó el día, o es de hoy pero ya pasó el horario asignado, va directo a
+  // "Urgente/vencido" en vez de quedarse en "Vence hoy" hasta la medianoche.
+  if(taskOverdueNow(t)) return 'vencida';
   const today = todayKey();
-  if(t.dueDate < today) return 'vencida';
   if(t.dueDate === today) return 'hoy';
   const diffDays = Math.round((new Date(t.dueDate+'T00:00:00') - new Date(today+'T00:00:00')) / 86400000);
   if(diffDays <= 2) return 'pronto';
@@ -2328,7 +2489,7 @@ function urgencyKeyOf(t){
 function personalTasksPendingForPanorama(){
   const todayStr = todayKey();
   return (personalTasks||[]).filter(t=>{
-    if(!isAdmin && t.assignedPerson !== viewerPerson) return false;
+    if(!isAdmin && !taskInvolvesPerson(t, viewerPerson)) return false;
     if(isStefLimitedAdmin && t.assignedPerson === 'ariel') return false;
     if(taskRepeatType(t) !== 'none') return !isTaskDoneForDate(t, todayStr);
     return !t.resolved;
@@ -2371,19 +2532,26 @@ function panoramaCardHtml(t){
   const timeTxt = t.time ? `<span class="pdue-pill">🕐 ${escapeHtml(t.time)}</span>` : '';
   const draggableAttr = taskRepeatType(t) === 'none' ? 'draggable="true"' : '';
   const dependsChip = t.dependsOnAriel ? `<span class="plabel-chip" style="background:#c98a1a">⏳ Depende de Ariel</span>` : '';
+  const creatorName = t.createdBy ? (PEOPLE[t.createdBy] || t.createdBy) : '';
+  const creatorChip = creatorName ? `<span class="plabel-chip" style="background:#ded9c9;color:#5c5644">🖊️ ${escapeHtml(creatorName)}</span>` : '';
+  const sharedNames = sharedWithNames(t);
+  const sharedLine = sharedNames.length ? `<div class="presp-inline" style="opacity:.75;font-size:11.5px;margin-top:2px;">👥 con ${escapeHtml(sharedNames.join(', '))}</div>` : '';
   return `
     <div class="pcard" data-id="${t.id}" ${draggableAttr}>
       <div class="pcard-check panorama-check" data-id="${t.id}" title="Marcar como terminada"></div>
-      <div class="pcard-labels"><span class="plabel-chip" style="background:${initialsColorFor(sectorLabel)}">${escapeHtml(sectorLabel)}</span>${dependsChip}</div>
+      <div class="pcard-labels"><span class="plabel-chip" style="background:${initialsColorFor(sectorLabel)}">${escapeHtml(sectorLabel)}</span>${dependsChip}${creatorChip}</div>
       <div class="pcard-title">${escapeHtml(t.text)}</div>
       <div class="pcard-footer">
         <div style="display:flex;gap:4px;flex-wrap:wrap;">
           ${dueTxt ? `<span class="pdue-pill ${overdue?'overdue':''}">📅 ${dueTxt}</span>` : ''}
           ${timeTxt}
         </div>
-        <div class="presp-inline">
-          <span class="presp-name">${escapeHtml(responsableName)}</span>
-          <div class="pavatar" style="background:${initialsColorFor(responsableName)}" title="${escapeHtml(responsableName)}">${initialsOf(responsableName)}</div>
+        <div>
+          <div class="presp-inline">
+            <span class="presp-name">${escapeHtml(responsableName)}</span>
+            <div class="pavatar" style="background:${initialsColorFor(responsableName)}" title="${escapeHtml(responsableName)}">${initialsOf(responsableName)}</div>
+          </div>
+          ${sharedLine}
         </div>
       </div>
     </div>`;
@@ -2614,6 +2782,15 @@ function wireUrgencyDragDrop(board){
       if(!t) return;
       if(urgencyKeyOf(t) === bandKey) return;
       t.dueDate = dueDateForBand(bandKey);
+      // Si la movés a "Vence hoy" pero ya tenía una hora puntual que ya pasó, esa hora
+      // haría que la tarjeta vuelva a saltar sola a "Urgente/vencido" apenas se
+      // recalcule — la sacamos para que se quede donde la soltaste.
+      if(bandKey==='hoy' && t.time){
+        const [hh, mm] = t.time.split(':').map(Number);
+        const dueMoment = new Date();
+        dueMoment.setHours(hh, mm||0, 0, 0);
+        if(Date.now() > dueMoment.getTime()) t.time = '';
+      }
       renderAllTaskViews();
       await saveOneTask(t);
       setStatus('tarjeta movida');
@@ -2780,6 +2957,8 @@ function openQuickAddModal(presetPerson, presetSector){
   document.getElementById('qa-time').value = '';
   document.getElementById('qa-text').value = '';
   document.getElementById('qa-depends').checked = false;
+  qaSharedDraft = [];
+  renderQaSharedPicker();
   document.getElementById('quick-add-modal').classList.add('open');
   document.getElementById('qa-text').focus();
 }
@@ -2801,11 +2980,12 @@ async function saveQuickAdd(){
     time: document.getElementById('qa-time').value || '',
     ts: Date.now(),
     resolved: false,
-    repeat: 'none'
+    repeat: 'none',
+    createdBy: viewerPerson,
+    createdAt: Date.now()
   };
+  if(qaSharedDraft.length) newTask.sharedWith = [...qaSharedDraft];
   if(!isAdmin){
-    newTask.createdBy = viewerPerson;
-    newTask.createdAt = Date.now();
     if(document.getElementById('qa-depends').checked){
       newTask.dependsOnAriel = true;
       newTask.dependsUnseen = true;
@@ -2822,6 +3002,7 @@ async function saveQuickAdd(){
 }
 document.getElementById('qa-cancel').addEventListener('click', closeQuickAddModal);
 document.getElementById('qa-save').addEventListener('click', saveQuickAdd);
+document.getElementById('qa-person').addEventListener('change', renderQaSharedPicker);
 document.getElementById('quick-add-modal').addEventListener('click', (e)=>{
   if(e.target.id === 'quick-add-modal') closeQuickAddModal();
 });
@@ -3383,7 +3564,7 @@ function renderPersonalTasks(){
   if(taskFilter === 'todas') filtered = personalTasks;
   else if(taskFilter === 'sinresp') filtered = personalTasks.filter(t=>!personalTaskHasResponsible(t));
   else filtered = personalTasks.filter(t=>t.area===taskFilter);
-  if(!isAdmin) filtered = filtered.filter(t=>t.assignedPerson===viewerPerson);
+  if(!isAdmin) filtered = filtered.filter(t=>taskInvolvesPerson(t, viewerPerson));
   else if(isStefLimitedAdmin) filtered = filtered.filter(t=>t.assignedPerson!=='ariel');
   const todayStr = todayKey();
   if(!filtered.length){
@@ -3451,9 +3632,10 @@ async function addPersonalTask(){
     repeat: repeatEl.value || 'none'
   };
   if(newTask.repeat === 'custom') newTask.repeatDays = [...taskRepeatDaysDraft];
+  if(taskSharedDraft.length) newTask.sharedWith = [...taskSharedDraft];
+  newTask.createdBy = viewerPerson;
+  newTask.createdAt = Date.now();
   if(!isAdmin){
-    newTask.createdBy = viewerPerson;
-    newTask.createdAt = Date.now();
     if(document.getElementById('task-depends').checked){
       newTask.dependsOnAriel = true;
       newTask.dependsUnseen = true;
@@ -3468,6 +3650,8 @@ async function addPersonalTask(){
   repeatEl.value = 'none';
   taskRepeatDaysDraft = [];
   renderTaskRepeatDaysPicker();
+  taskSharedDraft = [];
+  renderTaskSharedPicker();
   const dependsEl = document.getElementById('task-depends');
   if(dependsEl) dependsEl.checked = false;
   renderAllTaskViews();
@@ -3477,6 +3661,7 @@ async function addPersonalTask(){
 }
 
 document.getElementById('task-add-btn').addEventListener('click', addPersonalTask);
+document.getElementById('task-person').addEventListener('change', renderTaskSharedPicker);
 document.getElementById('task-text-input').addEventListener('keydown', (e)=>{
   if(e.key === 'Enter' && !e.shiftKey){
     e.preventDefault();
@@ -3509,6 +3694,8 @@ function openEditPersonalTask(id){
   personSel.disabled = !isAdmin;
   document.getElementById('edit-ptask-person-field').style.opacity = !isAdmin ? '0.5' : '1';
   document.getElementById('edit-ptask-depends').checked = !!t.dependsOnAriel;
+  editSharedDraft = t.sharedWith ? [...t.sharedWith] : [];
+  renderEditSharedPicker();
   document.getElementById('edit-ptask-modal').classList.add('open');
 }
 
@@ -3557,6 +3744,7 @@ async function saveEditPersonalTask(){
   if(isAdmin){
     t.assignedPerson = document.getElementById('edit-ptask-person').value || '';
   }
+  if(editSharedDraft.length) t.sharedWith = [...editSharedDraft]; else delete t.sharedWith;
   const prevDepends = !!t.dependsOnAriel;
   const newDepends = document.getElementById('edit-ptask-depends').checked;
   t.dependsOnAriel = newDepends;
@@ -3571,6 +3759,7 @@ async function saveEditPersonalTask(){
 
 document.getElementById('edit-ptask-cancel').addEventListener('click', closeEditPersonalTask);
 document.getElementById('edit-ptask-save').addEventListener('click', saveEditPersonalTask);
+document.getElementById('edit-ptask-person').addEventListener('change', renderEditSharedPicker);
 document.getElementById('edit-ptask-delete').addEventListener('click', async ()=>{
   const t = personalTasks.find(x=>x.id===editingPersonalTaskId);
   if(!t) return;
@@ -3610,7 +3799,7 @@ function renderDaySummary(){
 // Tareas del viewer que aplican al día que se está mirando (hoy o el navegado), sin contar
 // las que no tienen fecha en absoluto (esas viven aparte, en "Pendientes por asignar").
 function getDayTasksForViewer(todayStr){
-  return (personalTasks||[]).filter(t => t.assignedPerson === viewerPerson && !(!t.dueDate && taskRepeatType(t)==='none') && taskAppliesToDate(t, todayStr) && !isTaskDoneForDate(t, todayStr));
+  return (personalTasks||[]).filter(t => taskInvolvesPerson(t, viewerPerson) && !(!t.dueDate && taskRepeatType(t)==='none') && taskAppliesToDate(t, todayStr) && !isTaskDoneForDate(t, todayStr));
 }
 
 function renderDatedSummary(){
@@ -3717,7 +3906,7 @@ function renderDatedSummary(){
 function getPendientesPorAsignar(todayStr){
   const dayTasks = getDayTasksForViewer(todayStr);
   const noTimeScheduled = dayTasks.filter(t=>!t.time);
-  const noDateTasks = (personalTasks||[]).filter(t => t.assignedPerson === viewerPerson && taskRepeatType(t)==='none' && !t.dueDate && !isTaskDoneForDate(t, todayStr));
+  const noDateTasks = (personalTasks||[]).filter(t => taskInvolvesPerson(t, viewerPerson) && taskRepeatType(t)==='none' && !t.dueDate && !isTaskDoneForDate(t, todayStr));
   const combined = [...noTimeScheduled, ...noDateTasks];
   const rank = (t) => {
     if(!t.dueDate) return 2;
