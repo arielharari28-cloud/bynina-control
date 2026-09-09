@@ -2685,7 +2685,10 @@ function renderPanoramaByUrgencia(){
   const board = document.getElementById('panorama-board');
   const grouped = {vencida:[], hoy:[], pronto:[], normal:[]};
   personalTasksPendingForPanorama()
-    .filter(t=>(isAdmin ? panoramaPersonIncluded(t.assignedPerson) : true) && panoramaSectorIncluded(t.sector))
+    // El filtro por persona (los botones de arriba) debe incluir tanto al responsable
+    // principal como a cualquier invitado de la tarea (sharedWith) — si no, filtrando
+    // por "Ari" no aparecen las tareas donde Ari es invitado pero no responsable.
+    .filter(t=>(isAdmin ? (panoramaPersonIncluded(t.assignedPerson) || (t.sharedWith||[]).some(k=>panoramaPersonIncluded(k))) : true) && panoramaSectorIncluded(t.sector))
     .forEach(t=>{ grouped[urgencyKeyOf(t)].push({kind:'tarea', t}); });
   Object.values(fabricaPendientes||{})
     .filter(it=> (isAdmin ? (!panoramaSelectedPeople || panoramaFabricaIncluded(it)) : (it.personKeys||[]).includes(viewerPerson)) && panoramaFabricaSectorIncluded())
