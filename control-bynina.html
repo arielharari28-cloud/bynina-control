@@ -2490,7 +2490,7 @@ function personalTasksPendingForPanorama(){
   const todayStr = todayKey();
   return (personalTasks||[]).filter(t=>{
     if(!isAdmin && !taskInvolvesPerson(t, viewerPerson)) return false;
-    if(isStefLimitedAdmin && t.assignedPerson === 'ariel') return false;
+    if(isStefLimitedAdmin && t.assignedPerson === 'ariel' && !taskInvolvesPerson(t,'stef')) return false;
     if(taskRepeatType(t) !== 'none') return !isTaskDoneForDate(t, todayStr);
     return !t.resolved;
   });
@@ -3565,7 +3565,7 @@ function renderPersonalTasks(){
   else if(taskFilter === 'sinresp') filtered = personalTasks.filter(t=>!personalTaskHasResponsible(t));
   else filtered = personalTasks.filter(t=>t.area===taskFilter);
   if(!isAdmin) filtered = filtered.filter(t=>taskInvolvesPerson(t, viewerPerson));
-  else if(isStefLimitedAdmin) filtered = filtered.filter(t=>t.assignedPerson!=='ariel');
+  else if(isStefLimitedAdmin) filtered = filtered.filter(t=>t.assignedPerson!=='ariel' || taskInvolvesPerson(t,'stef'));
   const todayStr = todayKey();
   if(!filtered.length){
     el.innerHTML = '<div class="empty">No hay tareas acá.</div>';
