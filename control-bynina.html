@@ -2755,9 +2755,16 @@ function dueDateForBand(bandKey){
 // "Sin apuro" sin importar la fecha).
 function wireUrgencyDragDrop(board){
   board.querySelectorAll('.pcard[draggable="true"]').forEach(card=>{
-    card.addEventListener('dragstart', ()=>{
+    card.addEventListener('dragstart', (e)=>{
       dragUrgencyCardId = card.dataset.id;
       card.classList.add('dragging');
+      // Algunos navegadores (Firefox en particular) no completan un drag nativo si no
+      // se llama a setData en el dragstart — sin esto, el evento "drop" a veces ni
+      // llega a dispararse.
+      if(e.dataTransfer){
+        e.dataTransfer.effectAllowed = 'move';
+        try{ e.dataTransfer.setData('text/plain', card.dataset.id); }catch(err){}
+      }
     });
     card.addEventListener('dragend', ()=>{
       card.classList.remove('dragging');
@@ -2784,6 +2791,7 @@ function wireUrgencyDragDrop(board){
       const t = personalTasks.find(x=>x.id===id);
       if(!t) return;
       if(urgencyKeyOf(t) === bandKey) return;
+      const prevDueDate = t.dueDate, prevTime = t.time;
       t.dueDate = dueDateForBand(bandKey);
       // Si la movés a "Vence hoy" pero ya tenía una hora puntual que ya pasó, esa hora
       // haría que la tarjeta vuelva a saltar sola a "Urgente/vencido" apenas se
@@ -2795,8 +2803,16 @@ function wireUrgencyDragDrop(board){
         if(Date.now() > dueMoment.getTime()) t.time = '';
       }
       renderAllTaskViews();
-      await saveOneTask(t);
-      setStatus('tarjeta movida');
+      const ok = await saveOneTask(t);
+      if(ok){
+        setStatus('tarjeta movida');
+      }else{
+        // No se pudo guardar de verdad — la devolvemos a como estaba para que la
+        // pantalla no mienta, y avisamos en vez de fallar en silencio.
+        t.dueDate = prevDueDate; t.time = prevTime;
+        renderAllTaskViews();
+        alert('No se pudo guardar el cambio (revisá tu conexión) — la tarjeta volvió a su lugar. Probá de nuevo.');
+      }
     });
   });
 }
@@ -3282,7 +3298,11 @@ function attachPersonalTasksListener(){
 async function saveOneTask(t){
   try{
     await db.ref('control_bynina/tasks_v2/' + t.id).set(t);
-  }catch(e){}
+    return true;
+  }catch(e){
+    console.error('saveOneTask falló', e);
+    return false;
+  }
 }
 // Para cuando cambian varias tareas juntas (ej: reordenar arrastrando un grupo entero).
 async function saveTasksMulti(tasksArr){
