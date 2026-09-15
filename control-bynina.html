@@ -3320,10 +3320,10 @@ async function deleteOneTaskRemote(id){
 
 function renderTaskFilters(){
   const el = document.getElementById('task-filters');
-  const keys = ['todas', 'sinresp', ...visibleAreaEntries().map(([k])=>k)];
+  const keys = ['todas', 'repetitivas', 'sinresp', ...visibleAreaEntries().map(([k])=>k)];
   const unassignedCount = personalTasks.filter(t=>!personalTaskHasResponsible(t)).length;
   el.innerHTML = keys.map(k=>{
-    const label = k==='todas' ? 'Todas' : k==='sinresp' ? `⚠️ Sin responsable${unassignedCount?` (${unassignedCount})`:''}` : AREAS[k];
+    const label = k==='todas' ? 'Todas' : k==='repetitivas' ? '🔁 Repetitivas' : k==='sinresp' ? `⚠️ Sin responsable${unassignedCount?` (${unassignedCount})`:''}` : AREAS[k];
     return `<div class="chip ${taskFilter===k?'active':''}" data-key="${k}">${label}</div>`;
   }).join('');
   el.querySelectorAll('.chip').forEach(c=>{
@@ -3417,6 +3417,51 @@ function sortPersonalTaskGroup(arr){
     if(ra && rb && ra !== rb) return ra.localeCompare(rb);
     return (a.time||'').localeCompare(b.time||'');
   });
+}
+
+// A qué "cajón" del día pertenece una tarea repetitiva, para poder verlas todas juntas
+// y detectar de un vistazo si dos caen el mismo día a la misma hora. Una tarea de "días
+// específicos" puede caer en más de un cajón (ej: Lun y Mié).
+function personalTaskRepeatDayKeys(t){
+  const type = taskRepeatType(t);
+  if(type === 'daily') return ['daily'];
+  if(type === 'custom') return (t.repeatDays && t.repeatDays.length) ? t.repeatDays.slice() : [];
+  if(type === 'weekly' || type === 'biweekly'){
+    if(!t.dueDate) return [];
+    return [new Date(t.dueDate+'T00:00:00').getDay()];
+  }
+  if(type === 'monthly') return ['monthly'];
+  return [];
+}
+
+const REPEAT_GROUP_LABEL = {daily:'🔁 Todos los días', monthly:'🔁 Mensual',
+  1:'Lunes', 2:'Martes', 3:'Miércoles', 4:'Jueves', 5:'Viernes', 6:'Sábado', 0:'Domingo'};
+
+// Vista de "Repetitivas": todas las tareas que se repiten, agrupadas por día de la
+// semana (o "todos los días" / "mensual"), ordenadas por horario adentro de cada grupo
+// para que sea fácil ver si dos tareas quedaron pisándose a la misma hora.
+function renderRepeatingTasksHtml(tasksArr){
+  if(!tasksArr.length) return '<div class="empty">No tenés tareas configuradas para repetirse.</div>';
+  const buckets = {daily:[], 1:[], 2:[], 3:[], 4:[], 5:[], 6:[], 0:[], monthly:[]};
+  tasksArr.forEach(t=>{
+    personalTaskRepeatDayKeys(t).forEach(k=>{ if(buckets[k]) buckets[k].push(t); });
+  });
+  const order = ['daily', ...WEEKDAY_ORDER, 'monthly'];
+  let html = '';
+  order.forEach(k=>{
+    const items = buckets[k];
+    if(!items || !items.length) return;
+    const sorted = items.slice().sort((a,b)=>{
+      const ta=a.time||'', tb=b.time||'';
+      if(ta && tb && ta!==tb) return ta.localeCompare(tb);
+      if(ta && !tb) return -1;
+      if(!ta && tb) return 1;
+      return (a.text||'').localeCompare(b.text||'');
+    });
+    html += `<div class="ptask-date-group">${REPEAT_GROUP_LABEL[k]} <span style="font-weight:400;color:var(--ink-soft)">(${items.length})</span></div>`;
+    html += sorted.map(personalTaskHtml).join('');
+  });
+  return html;
 }
 
 function renderTaskDateGroupsHtml(tasksArr, todayStr){
@@ -3585,19 +3630,22 @@ function renderPersonalTasks(){
   const el = document.getElementById('task-list');
   let filtered;
   if(taskFilter === 'todas') filtered = personalTasks;
+  else if(taskFilter === 'repetitivas') filtered = personalTasks.filter(t=>taskRepeatType(t)!=='none');
   else if(taskFilter === 'sinresp') filtered = personalTasks.filter(t=>!personalTaskHasResponsible(t));
   else filtered = personalTasks.filter(t=>t.area===taskFilter);
   if(!isAdmin) filtered = filtered.filter(t=>taskInvolvesPerson(t, viewerPerson));
   else if(isStefLimitedAdmin) filtered = filtered.filter(t=>t.assignedPerson!=='ariel' || taskInvolvesPerson(t,'stef'));
   const todayStr = todayKey();
   if(!filtered.length){
-    el.innerHTML = '<div class="empty">No hay tareas acá.</div>';
+    el.innerHTML = taskFilter==='repetitivas' ? '<div class="empty">No tenés tareas configuradas para repetirse.</div>' : '<div class="empty">No hay tareas acá.</div>';
     renderDaySummary();
     return;
   }
 
   let html = '';
-  if(taskFilter === 'nina' && isAdmin){
+  if(taskFilter === 'repetitivas'){
+    html = renderRepeatingTasksHtml(filtered);
+  } else if(taskFilter === 'nina' && isAdmin){
     // En "By Nina" se ven las tareas de todos, separadas por responsable.
     const byPerson = {};
     filtered.forEach(t=>{
