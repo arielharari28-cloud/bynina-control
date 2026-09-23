@@ -2527,8 +2527,12 @@ function fabricaCardHtml(it){
 function panoramaCardHtml(t){
   const sectorLabel = t.sector ? (SECTORS[t.sector]||t.sector) : (AREAS[t.area]||t.area);
   const responsableName = PEOPLE[t.assignedPerson] || t.assignedPerson || 'Sin responsable';
-  const overdue = t.dueDate && t.dueDate < todayKey();
-  const dueTxt = t.dueDate ? fmtDue(t.dueDate) : '';
+  // En tareas que se repiten, t.dueDate es solo la fecha ancla (cuando se creó), no la
+  // fecha de hoy: mostramos la próxima ocurrencia pendiente real (hoy, si todavía no se marcó).
+  const isRepeat = taskRepeatType(t) !== 'none';
+  const shownDue = isRepeat ? nextRecurrence(t) : t.dueDate;
+  const overdue = !isRepeat && t.dueDate && t.dueDate < todayKey();
+  const dueTxt = shownDue ? fmtDue(shownDue) : '';
   const timeTxt = t.time ? `<span class="pdue-pill">🕐 ${escapeHtml(t.time)}</span>` : '';
   const draggableAttr = taskRepeatType(t) === 'none' ? 'draggable="true"' : '';
   const dependsChip = t.dependsOnAriel ? `<span class="plabel-chip" style="background:#c98a1a">⏳ Depende de Ariel</span>` : '';
