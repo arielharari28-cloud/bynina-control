@@ -505,6 +505,15 @@
     font-size:13px;
   }
   .modal-field textarea{min-height:44px;}
+  .sched-error{display:none;background:var(--red-soft);color:var(--red);border-radius:8px;padding:7px 10px;font-size:12.5px;line-height:1.45;margin-bottom:8px;}
+  .sched-error.show{display:block;}
+  .cl-list{display:flex;flex-direction:column;gap:4px;margin-bottom:6px;}
+  .cl-row{display:flex;align-items:center;gap:6px;}
+  .modal-field .cl-row input[type=checkbox]{width:18px;height:18px;flex:0 0 18px;margin:0;}
+  .modal-field .cl-row input[type=text]{flex:1;min-width:0;}
+  .cl-row.done input[type=text]{text-decoration:line-through;color:var(--ink-soft);}
+  .cl-del{background:none;border:none;color:var(--ink-soft);font-size:16px;padding:0 4px;cursor:pointer;min-height:auto;}
+  .cl-count{font-weight:500;color:var(--ink-soft);}
   .modal-footer{
     display:flex;
     justify-content:flex-end;
@@ -1058,7 +1067,8 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
       <select id="task-sector"></select>
       <select id="task-person"></select>
       <input type="date" id="task-due-date">
-      <input type="time" id="task-time-input">
+      <input type="time" id="task-time-input" title="Inicio">
+      <input type="time" id="task-end-input" title="Fin">
       <textarea id="task-text-input" placeholder="Qué tenés que hacer..."></textarea>
       <select id="task-repeat"></select>
       <button id="task-add-btn">Agregar</button>
@@ -1202,13 +1212,23 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
     </div>
     <div class="modal-row">
       <div class="modal-field">
-        <label for="qa-time">Horario (opcional)</label>
+        <label for="qa-time">Inicio (opcional)</label>
         <input type="time" id="qa-time">
       </div>
+      <div class="modal-field">
+        <label for="qa-end">Fin</label>
+        <input type="time" id="qa-end">
+      </div>
     </div>
+    <div class="sched-error" id="qa-sched-error"></div>
     <div class="modal-field">
       <label for="qa-text">Tarea</label>
       <textarea id="qa-text" placeholder="Qué hay que hacer..."></textarea>
+    </div>
+    <div class="modal-field">
+      <label>☑️ Checklist (opcional) <span class="cl-count" id="qa-cl-count"></span></label>
+      <div class="cl-list" id="qa-cl-list"></div>
+      <input type="text" id="qa-cl-new" placeholder="➕ Agregar ítem y Enter">
     </div>
     <div class="modal-field">
       <label>👥 Compartir también con (opcional — ej: reunión de varios)</label>
@@ -1251,13 +1271,23 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
     </div>
     <div class="modal-row">
       <div class="modal-field">
-        <label for="edit-ptask-time">Horario</label>
+        <label for="edit-ptask-time">Inicio</label>
         <input type="time" id="edit-ptask-time">
       </div>
+      <div class="modal-field">
+        <label for="edit-ptask-end">Fin</label>
+        <input type="time" id="edit-ptask-end">
+      </div>
     </div>
+    <div class="sched-error" id="edit-ptask-sched-error"></div>
     <div class="modal-field">
       <label for="edit-ptask-text">Tarea</label>
       <textarea id="edit-ptask-text"></textarea>
+    </div>
+    <div class="modal-field">
+      <label>☑️ Checklist <span class="cl-count" id="edit-cl-count"></span></label>
+      <div class="cl-list" id="edit-cl-list"></div>
+      <input type="text" id="edit-cl-new" placeholder="➕ Agregar ítem y Enter">
     </div>
     <div class="modal-field">
       <label>👥 Compartir también con (opcional — ej: reunión de varios)</label>
@@ -1557,6 +1587,193 @@ document.addEventListener('click', (e)=>{
 function taskRepeatType(t){
   if(t.repeat) return t.repeat;
   return t.repeatDaily ? 'daily' : 'none';
+}
+
+/* ===== Horario inicio/fin + choque de horarios ===== */
+function hhmmToMin(v){
+  if(!v) return null;
+  const [h,m] = v.split(':').map(Number);
+  return Number.isNaN(h) ? null : h*60 + (m||0);
+}
+// Texto del horario: "14:30–15:30", o solo "14:30" en tareas viejas sin fin.
+function taskTimeLabel(t){
+  if(!t.time) return '';
+  return t.endTime ? `${t.time}–${t.endTime}` : t.time;
+}
+// Rango ocupado en minutos. Las tareas viejas que tienen solo inicio cuentan 30 min.
+function taskTimeRange(t){
+  const a = hhmmToMin(t.time);
+  if(a===null) return null;
+  let b = hhmmToMin(t.endTime);
+  if(b===null || b<=a) b = a + 30;
+  return [a,b];
+}
+function taskPeople(t){
+  const arr = [];
+  if(t.assignedPerson) arr.push(t.assignedPerson);
+  (t.sharedWith||[]).forEach(k=>{ if(k && !arr.includes(k)) arr.push(k); });
+  return arr;
+}
+// ¿La tarea ocupa ese día y sigue pendiente ese día?
+function taskOccupiesDate(t, dateStr){
+  if(taskRepeatType(t) !== 'none'){
+    return taskRecursOnDate(t, dateStr) && !isTaskDoneForDate(t, dateStr);
+  }
+  return t.dueDate === dateStr && !t.resolved;
+}
+// Días a revisar para la tarea candidata: su fecha, o si se repite, sus próximas
+// ocurrencias en los siguientes 60 días.
+function candidateDates(c){
+  if(taskRepeatType(c) === 'none') return c.dueDate ? [c.dueDate] : [];
+  const out = [];
+  const d = new Date(todayKey()+'T00:00:00');
+  for(let i=0;i<60;i++){
+    const k = dateKey(d);
+    if(taskRecursOnDate(c, k)) out.push(k);
+    d.setDate(d.getDate()+1);
+  }
+  return out;
+}
+// Busca si la tarea candidata se pisa con otra pendiente del responsable o de algún
+// invitado. Devuelve {other, date, person} o null. Sin horario no bloquea nada.
+function findScheduleConflict(c){
+  const r = taskTimeRange(c);
+  if(!r) return null;
+  const people = taskPeople(c);
+  if(!people.length) return null;
+  const dates = candidateDates(c);
+  for(const date of dates){
+    for(const o of (personalTasks||[])){
+      if(o.id === c.id) continue;
+      const ro = taskTimeRange(o);
+      if(!ro) continue;
+      if(!(r[0] < ro[1] && ro[0] < r[1])) continue;
+      const shared = taskPeople(o).find(k=>people.includes(k));
+      if(!shared) continue;
+      if(!taskOccupiesDate(o, date)) continue;
+      return {other:o, date, person:shared};
+    }
+  }
+  return null;
+}
+function conflictMessage(conf){
+  const who = PEOPLE[conf.person] || conf.person;
+  // Las tareas de Ariel son privadas: si quien está cargando no es Ariel ni está en
+  // esa tarea, solo ve que Ariel no puede en ese horario, sin el nombre de la tarea.
+  const o = conf.other;
+  if(viewerPerson !== 'ariel' && taskInvolvesPerson(o, 'ariel') && !taskInvolvesPerson(o, viewerPerson)){
+    const rango = o.endTime ? `de ${o.time} a ${o.endTime}` : `a las ${o.time}`;
+    return `${PEOPLE.ariel || 'Ariel'} no puede ${rango} el ${fmtDue(conf.date)}. Elegí otro horario.`;
+  }
+  return `${who} ya tiene "${conf.other.text}" ${conf.other.endTime ? `de ${conf.other.time} a ${conf.other.endTime}` : `a las ${conf.other.time}`} el ${fmtDue(conf.date)}. Cambiá el horario para guardar.`;
+}
+// Valida inicio/fin y choques. Devuelve el texto del error o '' si está todo bien.
+function scheduleError(c){
+  if(c.endTime && !c.time) return 'Pusiste hora de fin pero no de inicio.';
+  if(c.time && !c.endTime) return 'Poné también la hora de fin.';
+  if(c.time && c.endTime && hhmmToMin(c.endTime) <= hhmmToMin(c.time)) return 'La hora de fin tiene que ser después del inicio.';
+  const conf = findScheduleConflict(c);
+  return conf ? conflictMessage(conf) : '';
+}
+function showSchedError(elId, msg){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  el.textContent = msg ? '⛔ ' + msg : '';
+  el.classList.toggle('show', !!msg);
+}
+
+/* ===== Checklist dentro de la tarea =====
+   t.checklist = [{id, text}]. Lo tildado se guarda aparte: en tareas de una vez en
+   t.checkDone {itemId:true}; en las que se repiten, por fecha en t.checkDates[fecha],
+   así cada ocurrencia arranca destildada. */
+function checklistDateFor(t){
+  return taskRepeatType(t) !== 'none' ? nextRecurrence(t) : null;
+}
+function checklistDoneMap(t){
+  const d = checklistDateFor(t);
+  if(d) return (t.checkDates && t.checkDates[d]) || {};
+  return t.checkDone || {};
+}
+function checklistProgress(t){
+  const items = t.checklist || [];
+  if(!items.length) return null;
+  const done = checklistDoneMap(t);
+  return {done: items.filter(i=>done[i.id]).length, total: items.length};
+}
+function draftFromTask(t){
+  const done = t ? checklistDoneMap(t) : {};
+  return ((t && t.checklist) || []).map(i=>({id:i.id, text:i.text, done:!!done[i.id]}));
+}
+function applyChecklistDraft(t, draft){
+  const clean = draft.map(i=>({...i, text:(i.text||'').trim()})).filter(i=>i.text);
+  if(!clean.length){
+    delete t.checklist; delete t.checkDone;
+    return;
+  }
+  t.checklist = clean.map(i=>({id:i.id, text:i.text}));
+  const map = {};
+  clean.forEach(i=>{ if(i.done) map[i.id] = true; });
+  const d = checklistDateFor(t);
+  if(d){
+    if(!t.checkDates) t.checkDates = {};
+    // Solo guardamos la ocurrencia actual; las viejas no hace falta arrastrarlas.
+    t.checkDates = {[d]: map};
+    delete t.checkDone;
+  } else {
+    t.checkDone = map;
+    delete t.checkDates;
+  }
+}
+function renderChecklistEditor(prefix, draft){
+  const list = document.getElementById(prefix+'-cl-list');
+  const count = document.getElementById(prefix+'-cl-count');
+  if(!list) return;
+  list.innerHTML = draft.map((i,idx)=>`
+    <div class="cl-row ${i.done?'done':''}">
+      <input type="checkbox" data-idx="${idx}" ${i.done?'checked':''}>
+      <input type="text" data-idx="${idx}" value="${escapeHtml(i.text)}">
+      <button type="button" class="cl-del" data-idx="${idx}" title="Quitar">✕</button>
+    </div>`).join('');
+  const n = draft.filter(i=>(i.text||'').trim()).length;
+  count.textContent = n ? `· ${draft.filter(i=>i.done && (i.text||'').trim()).length} de ${n}` : '';
+  list.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.addEventListener('change', ()=>{
+    draft[+cb.dataset.idx].done = cb.checked;
+    renderChecklistEditor(prefix, draft);
+  }));
+  list.querySelectorAll('input[type=text]').forEach(inp=>inp.addEventListener('input', ()=>{
+    draft[+inp.dataset.idx].text = inp.value;
+  }));
+  list.querySelectorAll('.cl-del').forEach(b=>b.addEventListener('click', ()=>{
+    draft.splice(+b.dataset.idx, 1);
+    renderChecklistEditor(prefix, draft);
+  }));
+}
+function wireChecklistNewInput(prefix, getDraft){
+  const inp = document.getElementById(prefix+'-cl-new');
+  inp.addEventListener('keydown', (e)=>{
+    if(e.key !== 'Enter') return;
+    e.preventDefault();
+    const v = inp.value.trim();
+    if(!v) return;
+    const draft = getDraft();
+    draft.push({id:'ci'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), text:v, done:false});
+    inp.value = '';
+    renderChecklistEditor(prefix, draft);
+  });
+}
+// Si quedó algo escrito en "Agregar ítem" sin apretar Enter, lo sumamos igual al guardar.
+function flushChecklistNewInput(prefix, draft){
+  const inp = document.getElementById(prefix+'-cl-new');
+  const v = inp ? inp.value.trim() : '';
+  if(v){
+    draft.push({id:'ci'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), text:v, done:false});
+    inp.value = '';
+  }
+}
+function checklistPillHtml(t){
+  const p = checklistProgress(t);
+  if(!p) return '';
+  return `<span class="pdue-pill" ${p.done===p.total?'style="color:#2f6b4f"':''}>☑️ ${p.done}/${p.total}</span>`;
 }
 
 // Tareas compartidas: además del responsable principal (assignedPerson), pueden tener
@@ -2337,6 +2554,13 @@ async function respondPedido(id, decision){
       createdBy: p.person,
       createdAt: Date.now()
     };
+    // Los pedidos traen solo hora de inicio: la reunión se agenda por 30 min.
+    if(newTask.time){
+      const m = hhmmToMin(newTask.time) + 30;
+      newTask.endTime = String(Math.floor(m/60)%24).padStart(2,'0') + ':' + String(m%60).padStart(2,'0');
+      const pConf = findScheduleConflict(newTask);
+      if(pConf && !confirm('Ojo: ' + conflictMessage(pConf).replace(' Cambiá el horario para guardar.','') + '\n\n¿Aprobar igual? (después podés cambiarle el horario)')) return;
+    }
     personalTasks.push(newTask);
     renderAllTaskViews();
     await saveOneTask(newTask);
@@ -2474,7 +2698,15 @@ function urgencyKeyOf(t){
   // cuando todavía están pendientes para HOY (ver personalTasksPendingForPanorama) —
   // por eso, mientras sigan sin marcarse, van directo a "Vence hoy" en vez de a
   // "Sin apuro": son, por definición, tareas vigentes de hoy.
-  if(taskRepeatType(t) !== 'none') return 'hoy';
+  // Tareas que se repiten: van a la columna de su PRÓXIMA ocurrencia pendiente real
+  // (antes caían todas en "Vence hoy" aunque tocaran el 01/10 o el 05/10).
+  if(taskRepeatType(t) !== 'none'){
+    const next = nextRecurrence(t);
+    const today = todayKey();
+    if(next <= today) return 'hoy';
+    const d = Math.round((new Date(next+'T00:00:00') - new Date(today+'T00:00:00')) / 86400000);
+    return d <= 2 ? 'pronto' : 'normal';
+  }
   if(!t.dueDate) return 'normal';
   // Si ya pasó el día, o es de hoy pero ya pasó el horario asignado, va directo a
   // "Urgente/vencido" en vez de quedarse en "Vence hoy" hasta la medianoche.
@@ -2533,7 +2765,7 @@ function panoramaCardHtml(t){
   const shownDue = isRepeat ? nextRecurrence(t) : t.dueDate;
   const overdue = !isRepeat && t.dueDate && t.dueDate < todayKey();
   const dueTxt = shownDue ? fmtDue(shownDue) : '';
-  const timeTxt = t.time ? `<span class="pdue-pill">🕐 ${escapeHtml(t.time)}</span>` : '';
+  const timeTxt = (t.time ? `<span class="pdue-pill">🕐 ${escapeHtml(taskTimeLabel(t))}</span>` : '') + checklistPillHtml(t);
   const draggableAttr = taskRepeatType(t) === 'none' ? 'draggable="true"' : '';
   const dependsChip = t.dependsOnAriel ? `<span class="plabel-chip" style="background:#c98a1a">⏳ Depende de Ariel</span>` : '';
   const creatorName = t.createdBy ? (PEOPLE[t.createdBy] || t.createdBy) : '';
@@ -2720,7 +2952,8 @@ function renderPanoramaByUrgencia(){
 // esperando en su etapa (más días = más urgente).
 function panoramaUrgenciaSort(a,b){
   if(a.kind==='tarea' && b.kind==='tarea'){
-    const da=a.t.dueDate||'', dbb=b.t.dueDate||'';
+    // effectiveDueKey: en las que se repiten usa la próxima ocurrencia, no la fecha ancla.
+    const da=effectiveDueKey(a.t), dbb=effectiveDueKey(b.t);
     if(da!==dbb){
       if(!da) return 1;
       if(!dbb) return -1;
@@ -2795,7 +3028,9 @@ function wireUrgencyDragDrop(board){
       const t = personalTasks.find(x=>x.id===id);
       if(!t) return;
       if(urgencyKeyOf(t) === bandKey) return;
-      const prevDueDate = t.dueDate, prevTime = t.time;
+      const prevDueDate = t.dueDate, prevTime = t.time, prevEnd = t.endTime;
+      const bandConf = findScheduleConflict({...t, dueDate: dueDateForBand(bandKey)});
+      if(bandConf){ alert('No se puede mover: ' + conflictMessage(bandConf)); return; }
       t.dueDate = dueDateForBand(bandKey);
       // Si la movés a "Vence hoy" pero ya tenía una hora puntual que ya pasó, esa hora
       // haría que la tarjeta vuelva a saltar sola a "Urgente/vencido" apenas se
@@ -2804,7 +3039,7 @@ function wireUrgencyDragDrop(board){
         const [hh, mm] = t.time.split(':').map(Number);
         const dueMoment = new Date();
         dueMoment.setHours(hh, mm||0, 0, 0);
-        if(Date.now() > dueMoment.getTime()) t.time = '';
+        if(Date.now() > dueMoment.getTime()){ t.time = ''; delete t.endTime; }
       }
       renderAllTaskViews();
       const ok = await saveOneTask(t);
@@ -2814,6 +3049,7 @@ function wireUrgencyDragDrop(board){
         // No se pudo guardar de verdad — la devolvemos a como estaba para que la
         // pantalla no mienta, y avisamos en vez de fallar en silencio.
         t.dueDate = prevDueDate; t.time = prevTime;
+        if(prevEnd) t.endTime = prevEnd;
         renderAllTaskViews();
         alert('No se pudo guardar el cambio (revisá tu conexión) — la tarjeta volvió a su lugar. Probá de nuevo.');
       }
@@ -2874,6 +3110,19 @@ function renderPanoramaByResponsable(){
         if(ma!==undefined && mb!==undefined) return ma-mb;
         if(ma!==undefined) return -1;
         if(mb!==undefined) return 1;
+      }
+      // Primero fecha (la más próxima arriba; sin fecha al final), después hora dentro
+      // del mismo día. Antes ordenaba solo por hora e ignoraba la fecha, por eso una
+      // tarea del 05/10 con horario quedaba arriba de una de hoy sin horario.
+      if(a.kind==='tarea' && b.kind==='tarea'){
+        const da = effectiveDueKey(a.t), dbb = effectiveDueKey(b.t);
+        if(da!==dbb){
+          if(!da) return 1;
+          if(!dbb) return -1;
+          return da.localeCompare(dbb);
+        }
+      } else if(a.kind!==b.kind){
+        return urgRank[a.urg]-urgRank[b.urg] || (a.kind==='fabrica' ? -1 : 1);
       }
       const ta = a.kind==='tarea' ? (a.t.time||'') : '';
       const tb = b.kind==='tarea' ? (b.t.time||'') : '';
@@ -2978,7 +3227,12 @@ function openQuickAddModal(presetPerson, presetSector){
   document.getElementById('qa-person').disabled = !isAdmin;
   document.getElementById('qa-due').value = '';
   document.getElementById('qa-time').value = '';
+  document.getElementById('qa-end').value = '';
   document.getElementById('qa-text').value = '';
+  showSchedError('qa-sched-error', '');
+  qaChecklistDraft = [];
+  document.getElementById('qa-cl-new').value = '';
+  renderChecklistEditor('qa', qaChecklistDraft);
   document.getElementById('qa-depends').checked = false;
   qaSharedDraft = [];
   renderQaSharedPicker();
@@ -2988,11 +3242,12 @@ function openQuickAddModal(presetPerson, presetSector){
 function closeQuickAddModal(){
   document.getElementById('quick-add-modal').classList.remove('open');
 }
+let qaChecklistDraft = [];
+wireChecklistNewInput('qa', ()=>qaChecklistDraft);
 async function saveQuickAdd(){
   const text = document.getElementById('qa-text').value.trim();
   if(!text) return;
   const btn = document.getElementById('qa-save');
-  btn.disabled = true;
   const newTask = {
     id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
     area: document.getElementById('qa-area').value,
@@ -3001,6 +3256,7 @@ async function saveQuickAdd(){
     text: text,
     dueDate: document.getElementById('qa-due').value || '',
     time: document.getElementById('qa-time').value || '',
+    endTime: document.getElementById('qa-end').value || '',
     ts: Date.now(),
     resolved: false,
     repeat: 'none',
@@ -3008,6 +3264,13 @@ async function saveQuickAdd(){
     createdAt: Date.now()
   };
   if(qaSharedDraft.length) newTask.sharedWith = [...qaSharedDraft];
+  const qaErr = scheduleError(newTask);
+  showSchedError('qa-sched-error', qaErr);
+  if(qaErr) return;
+  if(!newTask.endTime) delete newTask.endTime;
+  flushChecklistNewInput('qa', qaChecklistDraft);
+  applyChecklistDraft(newTask, qaChecklistDraft);
+  btn.disabled = true;
   if(!isAdmin){
     if(document.getElementById('qa-depends').checked){
       newTask.dependsOnAriel = true;
@@ -3345,7 +3608,8 @@ function personalTaskHtml(t){
   const overdue = repType==='none' && isOverdue(t.dueDate, done);
   const dueLabel = repType!=='none' ? repeatBadgeHtml(t) :
     (t.dueDate ? `<span class="due-badge ${overdue?'overdue':''}">${overdue?'venció ':'vence '}${fmtDue(t.dueDate)}</span>` : '');
-  const timeLabel = t.time ? `<span class="due-badge time-badge">🕐 ${t.time}</span>` : '';
+  const clp = checklistProgress(t);
+  const timeLabel = (t.time ? `<span class="due-badge time-badge">🕐 ${taskTimeLabel(t)}</span>` : '') + (clp ? `<span class="due-badge">☑️ ${clp.done}/${clp.total}</span>` : '');
   const postponeBtn = repType!=='none' ? '' : `<button class="edit-btn ptask-postpone" data-id="${t.id}" title="Posponer a mañana">⏭</button>`;
   const responsableName = personalTaskResponsibleName(t);
   const responsableLabel = responsableName ? `<span class="due-badge" style="background:#ede9fe;color:#5b4e9e">👁️ Responsable: ${escapeHtml(responsableName)}</span>` : '';
@@ -3693,7 +3957,7 @@ async function addPersonalTask(){
     return;
   }
   const btn = document.getElementById('task-add-btn');
-  btn.disabled = true;
+  const endEl = document.getElementById('task-end-input');
   const newTask = {
     id: 'tk' + Date.now() + Math.random().toString(36).slice(2,7),
     area: areaEl.value,
@@ -3706,8 +3970,12 @@ async function addPersonalTask(){
     resolved: false,
     repeat: repeatEl.value || 'none'
   };
+  if(endEl.value) newTask.endTime = endEl.value;
   if(newTask.repeat === 'custom') newTask.repeatDays = [...taskRepeatDaysDraft];
   if(taskSharedDraft.length) newTask.sharedWith = [...taskSharedDraft];
+  const legErr = scheduleError(newTask);
+  if(legErr){ alert(legErr); return; }
+  btn.disabled = true;
   newTask.createdBy = viewerPerson;
   newTask.createdAt = Date.now();
   if(!isAdmin){
@@ -3722,6 +3990,7 @@ async function addPersonalTask(){
   personalTasks.push(newTask);
   textEl.value = '';
   timeEl.value = '';
+  endEl.value = '';
   repeatEl.value = 'none';
   taskRepeatDaysDraft = [];
   renderTaskRepeatDaysPicker();
@@ -3745,6 +4014,8 @@ document.getElementById('task-text-input').addEventListener('keydown', (e)=>{
 });
 
 let editingPersonalTaskId = null;
+let editChecklistDraft = [];
+wireChecklistNewInput('edit', ()=>editChecklistDraft);
 
 function openEditPersonalTask(id){
   const t = personalTasks.find(x=>x.id===id);
@@ -3758,6 +4029,11 @@ function openEditPersonalTask(id){
     (sectorStillVisible ? '' : `<option value="${t.sector}" selected>${SECTORS[t.sector]||t.sector}</option>`);
   document.getElementById('edit-ptask-due').value = t.dueDate || '';
   document.getElementById('edit-ptask-time').value = t.time || '';
+  document.getElementById('edit-ptask-end').value = t.endTime || '';
+  showSchedError('edit-ptask-sched-error', '');
+  editChecklistDraft = draftFromTask(t);
+  document.getElementById('edit-cl-new').value = '';
+  renderChecklistEditor('edit', editChecklistDraft);
   document.getElementById('edit-ptask-text').value = t.text;
   document.getElementById('edit-ptask-repeat').innerHTML = repeatSelectOptionsHtml(taskRepeatType(t));
   editRepeatDaysDraft = t.repeatDays ? [...t.repeatDays] : [];
@@ -3791,7 +4067,10 @@ async function togglePersonalTaskResolved(id){
 async function postponePersonalTask(id){
   const t = personalTasks.find(x=>x.id===id);
   if(!t || taskRepeatType(t) !== 'none') return;
-  t.dueDate = nextDayKey(t.dueDate || dateKey(currentDate));
+  const newDue = nextDayKey(t.dueDate || dateKey(currentDate));
+  const conf = findScheduleConflict({...t, dueDate:newDue});
+  if(conf){ alert('No se puede posponer: ' + conflictMessage(conf)); return; }
+  t.dueDate = newDue;
   renderAllTaskViews();
   await saveOneTask(t);
   setStatus('pospuesta a mañana');
@@ -3802,11 +4081,29 @@ async function saveEditPersonalTask(){
   if(!t) return;
   const newText = document.getElementById('edit-ptask-text').value.trim();
   if(!newText) return;
+  // Chequeo de horario ANTES de tocar la tarea: armamos una copia con los valores
+  // nuevos y, si choca con otra o falta la hora de fin, no guardamos nada.
+  const preRepeat = document.getElementById('edit-ptask-repeat').value || 'none';
+  const cand = {
+    ...t,
+    dueDate: document.getElementById('edit-ptask-due').value || '',
+    time: document.getElementById('edit-ptask-time').value || '',
+    endTime: document.getElementById('edit-ptask-end').value || '',
+    repeat: preRepeat,
+    repeatDays: preRepeat === 'custom' ? [...editRepeatDaysDraft] : undefined,
+    assignedPerson: isAdmin ? (document.getElementById('edit-ptask-person').value || '') : t.assignedPerson,
+    sharedWith: [...editSharedDraft]
+  };
+  const editErr = scheduleError(cand);
+  showSchedError('edit-ptask-sched-error', editErr);
+  if(editErr) return;
   t.text = newText;
   t.area = document.getElementById('edit-ptask-area').value;
   t.sector = document.getElementById('edit-ptask-sector').value || '';
   t.dueDate = document.getElementById('edit-ptask-due').value || '';
   t.time = document.getElementById('edit-ptask-time').value || '';
+  const newEnd = document.getElementById('edit-ptask-end').value || '';
+  if(newEnd && t.time) t.endTime = newEnd; else delete t.endTime;
   const newRepeat = document.getElementById('edit-ptask-repeat').value || 'none';
   if(newRepeat === 'custom' && !editRepeatDaysDraft.length){
     alert('Elegí al menos un día de la semana.');
@@ -3820,6 +4117,8 @@ async function saveEditPersonalTask(){
     t.assignedPerson = document.getElementById('edit-ptask-person').value || '';
   }
   if(editSharedDraft.length) t.sharedWith = [...editSharedDraft]; else delete t.sharedWith;
+  flushChecklistNewInput('edit', editChecklistDraft);
+  applyChecklistDraft(t, editChecklistDraft);
   const prevDepends = !!t.dependsOnAriel;
   const newDepends = document.getElementById('edit-ptask-depends').checked;
   t.dependsOnAriel = newDepends;
@@ -3924,7 +4223,7 @@ function renderDatedSummary(){
     return `
     <div class="summary-row ${responsableName?'summary-row-shared':''}">
       <div class="summary-check" data-id="${t.id}"></div>
-      <span class="summary-time">${t.time}</span>
+      <span class="summary-time">${taskTimeLabel(t)}</span>
       <span class="summary-text">${escapeHtml(`${AREAS[t.area] || t.area} — ${t.text}`)}</span>
       ${sectorTagHtml(t)}
       ${responsableLabel}
