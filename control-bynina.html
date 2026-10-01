@@ -1089,6 +1089,11 @@
     .ag-row,.ag-backlog-head{grid-template-columns:10px 78px 20px 1fr;gap:6px;}
     .ag-time{font-size:11.5px;letter-spacing:-.2px;}
   }
+  .ag-to-today{
+    background:var(--purple-soft);color:var(--purple);border:none;border-radius:12px;
+    font-size:11.5px;font-weight:600;padding:3px 9px;cursor:pointer;
+  }
+  .ag-to-today:hover{background:var(--purple);color:#fff;}
 </style>
 </head>
 <body>
@@ -4519,6 +4524,7 @@ var mainView = (()=>{
 })();
 var agendaStart = new Date();
 var agendaBacklogOpen = false;
+var agendaNoDateOpen = (()=>{ try{ return localStorage.getItem('bynina_agenda_sinfecha_' + viewerPerson) !== '0'; }catch(e){ return true; } })();
 
 function applyMainView(){
   document.querySelectorAll('#main-view-tabs .mv-tab').forEach(b=>{
@@ -4645,6 +4651,24 @@ function renderAgenda(){
         }
       }
     }
+    // Pendientes sin fecha asignada (las de "Pendientes por asignar"), a mano en hoy.
+    if(isToday){
+      const noDate = mine.filter(t=>taskRepeatType(t)==='none' && !t.dueDate && !t.resolved)
+        .sort((a,b)=>(a.order ?? a.ts ?? 0) - (b.order ?? b.ts ?? 0));
+      if(noDate.length){
+        items += `<div class="ag-backlog-head ag-nodate-head" id="ag-nodate-toggle">
+          <span class="ag-dot" style="background:var(--purple)"></span>
+          <span class="ag-time">Sin fecha</span>
+          <span class="ag-backlog-icon" style="background:var(--purple)">${agendaNoDateOpen?'▾':'▸'}</span>
+          <span class="ag-title" style="color:var(--purple)">${noDate.length} ${noDate.length===1?'tarea':'tareas'} por asignar fecha</span>
+        </div>`;
+        if(agendaNoDateOpen){
+          items += `<div class="ag-backlog-list" style="border-left-color:var(--purple-soft)">${noDate.map(t=>
+            agendaRowHtml(t, todayStr, '', `<button class="ag-to-today" data-id="${t.id}" title="Pasarla a hoy">→ Hoy</button>`)
+          ).join('')}</div>`;
+        }
+      }
+    }
     // "Todo el día" de hoy que todavía no se tildó y ya pasó el mediodía: aviso en rojo,
     // para que no se vuelva el cajón donde se acumula todo.
     items += allDay.map(t=>{
@@ -4668,6 +4692,22 @@ function renderAgenda(){
   });
   list.innerHTML = html;
 
+  const nd = document.getElementById('ag-nodate-toggle');
+  if(nd) nd.addEventListener('click', ()=>{
+    agendaNoDateOpen = !agendaNoDateOpen;
+    try{ localStorage.setItem('bynina_agenda_sinfecha_' + viewerPerson, agendaNoDateOpen ? '1' : '0'); }catch(e){}
+    renderAgenda();
+  });
+  list.querySelectorAll('.ag-to-today').forEach(btn=>{
+    btn.addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      const t = personalTasks.find(x=>x.id===btn.dataset.id);
+      if(!t) return;
+      t.dueDate = todayKey();
+      renderAllTaskViews();
+      await saveOneTask(t);
+    });
+  });
   const bt = document.getElementById('ag-backlog-toggle');
   if(bt) bt.addEventListener('click', ()=>{ agendaBacklogOpen = !agendaBacklogOpen; renderAgenda(); });
   list.querySelectorAll('.ag-check').forEach(chk=>{
