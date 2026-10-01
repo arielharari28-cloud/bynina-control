@@ -1018,6 +1018,77 @@
   .ticket-draggable{cursor:grab;}
   .ticket-draggable:active{cursor:grabbing;}
   .ticket-draggable.dragging{opacity:.4;}
+
+  /* ===== Vista Agenda (estilo Google Calendar, lista por día) ===== */
+  .main-view-tabs{display:flex;gap:8px;margin-bottom:16px;}
+  .mv-tab{
+    font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;
+    padding:8px 16px;border-radius:18px;border:1px solid var(--line);
+    background:var(--card);color:var(--ink-soft);cursor:pointer;position:relative;
+  }
+  .mv-tab.active{background:var(--green);color:#fff;border-color:var(--green);}
+  .mv-new{
+    position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;
+    font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;
+  }
+  .ag-nav{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+  .ag-nav button{
+    background:var(--card);border:1px solid var(--line);color:var(--ink);
+    border-radius:18px;height:34px;padding:0 14px;font-size:14px;cursor:pointer;
+  }
+  .ag-nav .ag-arrow{width:34px;padding:0;font-size:18px;}
+  .ag-range{font-family:'Poppins',sans-serif;font-size:17px;font-weight:600;margin-left:6px;}
+  .ag-list{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px 0;}
+  .ag-day{display:grid;grid-template-columns:96px 1fr;gap:4px;padding:10px 12px;border-bottom:1px solid var(--line);}
+  .ag-day:last-child{border-bottom:none;}
+  .ag-date{display:flex;align-items:flex-start;gap:8px;padding-top:2px;}
+  .ag-daynum{
+    width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-family:'Poppins',sans-serif;font-size:18px;font-weight:500;color:var(--ink);flex-shrink:0;
+  }
+  .ag-dayname{font-size:11px;font-weight:600;color:var(--ink-soft);line-height:1.25;padding-top:4px;text-transform:lowercase;}
+  .ag-day.is-today .ag-daynum{background:var(--green);color:#fff;}
+  .ag-day.is-today .ag-dayname{color:var(--green);}
+  .ag-items{min-width:0;}
+  .ag-row{
+    display:grid;grid-template-columns:12px 92px 22px 1fr;align-items:center;gap:8px;
+    padding:7px 6px;border-radius:8px;cursor:pointer;
+  }
+  .ag-row:hover{background:var(--bg);}
+  .ag-dot{width:10px;height:10px;border-radius:50%;}
+  .ag-time{font-size:13px;color:var(--ink-soft);white-space:nowrap;}
+  .ag-check{
+    width:18px;height:18px;border-radius:50%;border:2px solid var(--ink-soft);
+    display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;
+  }
+  .ag-check:hover{border-color:var(--green);}
+  .ag-row.done .ag-check{background:var(--green);border-color:var(--green);}
+  .ag-title{font-size:14.5px;color:var(--ink);min-width:0;}
+  .ag-row.done .ag-title{text-decoration:line-through;color:var(--ink-soft);}
+  .ag-meta{display:inline-flex;gap:6px;flex-wrap:wrap;margin-left:6px;font-size:11.5px;color:var(--ink-soft);}
+  .ag-meta span{white-space:nowrap;}
+  .ag-row.busy{cursor:default;}
+  .ag-row.busy:hover{background:none;}
+  .ag-row.busy .ag-title{color:var(--ink-soft);font-style:italic;}
+  .ag-busy-icon{width:18px;height:18px;border-radius:4px;background:repeating-linear-gradient(45deg,var(--line) 0 3px,transparent 3px 6px);}
+  .ag-row.allday-stale .ag-time{color:var(--red);font-weight:600;}
+  .ag-now{position:relative;height:2px;background:#d93025;margin:3px 0 3px 6px;}
+  .ag-now::before{content:'';position:absolute;left:-6px;top:-5px;width:12px;height:12px;border-radius:50%;background:#d93025;}
+  .ag-empty{font-size:13px;color:var(--ink-soft);padding:8px 6px;}
+  .ag-backlog-head{
+    display:grid;grid-template-columns:12px 92px 22px 1fr;align-items:center;gap:8px;
+    padding:7px 6px;border-radius:8px;cursor:pointer;
+  }
+  .ag-backlog-head:hover{background:var(--bg);}
+  .ag-backlog-head .ag-title{font-weight:600;color:var(--red);}
+  .ag-backlog-icon{width:18px;height:18px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;}
+  .ag-backlog-list{border-left:2px solid var(--red-soft);margin:2px 0 6px 4px;}
+  @media (max-width:560px){
+    .ag-day{grid-template-columns:1fr;}
+    .ag-date{margin-bottom:4px;}
+    .ag-row,.ag-backlog-head{grid-template-columns:10px 78px 20px 1fr;gap:6px;}
+    .ag-time{font-size:11.5px;letter-spacing:-.2px;}
+  }
 </style>
 </head>
 <body>
@@ -1039,6 +1110,21 @@ if(localStorage.getItem('bynina_theme') === 'dark') document.body.classList.add(
   <div id="finished-notify-wrap" style="display:none;margin-bottom:16px;">
     <button class="finished-badge" id="finished-badge-btn"></button>
     <div class="finished-panel" id="finished-panel"></div>
+  </div>
+
+  <div class="main-view-tabs" id="main-view-tabs">
+    <button class="mv-tab" data-mv="agenda">📅 Agenda</button>
+    <button class="mv-tab" data-mv="tablero">🔭 Tablero</button>
+  </div>
+
+  <div id="agenda-wrap" style="display:none;margin-bottom:22px;">
+    <div class="ag-nav">
+      <button id="ag-today">Hoy</button>
+      <button class="ag-arrow" id="ag-prev" title="Semana anterior">‹</button>
+      <button class="ag-arrow" id="ag-next" title="Semana siguiente">›</button>
+      <span class="ag-range" id="ag-range"></span>
+    </div>
+    <div class="ag-list" id="agenda-list"><div class="ag-empty">Cargando...</div></div>
   </div>
 
   <div id="panorama-wrap" style="display:none;margin-bottom:22px;">
@@ -2897,7 +2983,7 @@ function renderPanoramaSectorFilter(){
 function renderPanorama(){
   const wrap = document.getElementById('panorama-wrap');
   if(!wrap) return;
-  wrap.style.display = 'block';
+  wrap.style.display = mainView === 'agenda' ? 'none' : 'block';
   const tabsEl = document.getElementById('panorama-view-tabs');
   const filterEl = document.getElementById('panorama-people-filter');
   renderPanoramaSectorFilter();
@@ -3548,6 +3634,7 @@ function attachPersonalTasksListener(){
     personalTasksFirstSyncDone = true;
     renderTaskFilters();
     renderPersonalTasks();
+    renderAgenda();
     if(isAdmin){
       renderMidiaPersonFilter();
       renderMidiaPersonTasks();
@@ -3892,6 +3979,7 @@ function renderAllTaskViews(){
   renderPersonalTasks();
   if(isAdmin) renderMidiaPersonTasks();
   renderPanorama();
+  renderAgenda();
 }
 
 function renderPersonalTasks(){
@@ -4411,6 +4499,195 @@ async function reorderNoDateTasks(todayStr, draggedId, targetId){
   await saveTasksMulti(group);
 }
 
+
+/* ===== Vista Agenda (estilo Google Calendar) =====
+   Lista por día: primero lo que es "todo el día" (sin horario), después lo que tiene
+   horario, con la línea roja de "ahora" en el día de hoy. Cada persona ve solo sus
+   tareas (responsable o invitada). Las tareas de Ariel que no los incluyen les
+   aparecen como "Ariel ocupado", sin el nombre — igual que en los choques de horario.
+   Ariel arranca en Agenda; el equipo arranca en su Tablero de siempre y puede cambiar
+   (la elección queda guardada en ese dispositivo). */
+const AGENDA_DAYS = 7;
+const MAIN_VIEW_KEY = 'bynina_main_view_' + viewerPerson;
+const AGENDA_SEEN_KEY = 'bynina_agenda_vista_' + viewerPerson;
+var mainView = (()=>{
+  try{
+    const v = localStorage.getItem(MAIN_VIEW_KEY);
+    if(v === 'agenda' || v === 'tablero') return v;
+  }catch(e){}
+  return viewerPerson === 'ariel' ? 'agenda' : 'tablero';
+})();
+var agendaStart = new Date();
+var agendaBacklogOpen = false;
+
+function applyMainView(){
+  document.querySelectorAll('#main-view-tabs .mv-tab').forEach(b=>{
+    b.classList.toggle('active', b.dataset.mv === mainView);
+  });
+  // Cartelito "Nuevo" en Agenda para el equipo, hasta que la abran una vez.
+  const agBtn = document.querySelector('#main-view-tabs .mv-tab[data-mv="agenda"]');
+  let seen = true;
+  try{ seen = viewerPerson === 'ariel' || localStorage.getItem(AGENDA_SEEN_KEY) === '1'; }catch(e){}
+  const badge = agBtn.querySelector('.mv-new');
+  if(!seen && !badge) agBtn.insertAdjacentHTML('beforeend','<span class="mv-new">Nuevo</span>');
+  if(seen && badge) badge.remove();
+  document.getElementById('agenda-wrap').style.display = mainView === 'agenda' ? 'block' : 'none';
+  if(personalTasksFirstSyncDone) renderPanorama();
+  else if(mainView === 'agenda') document.getElementById('panorama-wrap').style.display = 'none';
+  renderAgenda();
+}
+
+document.getElementById('main-view-tabs').addEventListener('click', (e)=>{
+  const btn = e.target.closest('.mv-tab');
+  if(!btn) return;
+  mainView = btn.dataset.mv;
+  try{
+    localStorage.setItem(MAIN_VIEW_KEY, mainView);
+    if(mainView === 'agenda') localStorage.setItem(AGENDA_SEEN_KEY, '1');
+  }catch(e){}
+  applyMainView();
+});
+document.getElementById('ag-today').addEventListener('click', ()=>{ agendaStart = new Date(); renderAgenda(); });
+document.getElementById('ag-prev').addEventListener('click', ()=>{
+  const d = new Date(agendaStart); d.setDate(d.getDate() - AGENDA_DAYS); agendaStart = d; renderAgenda();
+});
+document.getElementById('ag-next').addEventListener('click', ()=>{
+  const d = new Date(agendaStart); d.setDate(d.getDate() + AGENDA_DAYS); agendaStart = d; renderAgenda();
+});
+
+// ¿La tarea cae en ese día? (sin arrastrar atrasadas: esas van al grupo de pendientes)
+function agendaTaskOnDate(t, dateStr){
+  if(taskRepeatType(t) !== 'none') return taskRecursOnDate(t, dateStr);
+  return t.dueDate === dateStr;
+}
+function agendaDotColor(t){
+  return t.sector ? colorForSector(t.sector) : 'var(--purple)';
+}
+function agendaTimeText(t){
+  if(!t.time) return 'Todo el día';
+  return t.endTime ? `${t.time}–${t.endTime}` : t.time;
+}
+function agendaMetaHtml(t){
+  const bits = [];
+  if(t.area && t.area !== 'nina') bits.push(escapeHtml(AREAS[t.area] || t.area));
+  const otros = taskPeople(t).filter(k=>k !== viewerPerson).map(k=>PEOPLE[k]||k);
+  if(otros.length) bits.push('👥 ' + escapeHtml(otros.join(', ')));
+  if(taskRepeatType(t) !== 'none') bits.push('🔁');
+  const cl = checklistPillHtml(t);
+  return (bits.length || cl) ? `<span class="ag-meta">${bits.map(b=>`<span>${b}</span>`).join('')}${cl}</span>` : '';
+}
+function agendaRowHtml(t, dateStr, extraClass, timeOverride){
+  const done = isTaskDoneForDate(t, dateStr);
+  return `<div class="ag-row ${done?'done':''} ${extraClass||''}" data-id="${t.id}" data-date="${dateStr}">
+    <span class="ag-dot" style="background:${agendaDotColor(t)}"></span>
+    <span class="ag-time">${timeOverride || agendaTimeText(t)}</span>
+    <span class="ag-check" data-id="${t.id}" data-date="${dateStr}" title="${done?'Marcar como pendiente':'Marcar como hecha'}">${done?'✓':''}</span>
+    <span class="ag-title">${escapeHtml(t.text||'')}${agendaMetaHtml(t)}</span>
+  </div>`;
+}
+function agendaBusyRowHtml(t){
+  return `<div class="ag-row busy">
+    <span class="ag-dot" style="background:var(--line)"></span>
+    <span class="ag-time">${agendaTimeText(t)}</span>
+    <span class="ag-busy-icon"></span>
+    <span class="ag-title">${escapeHtml(PEOPLE.ariel || 'Ariel')} ocupado</span>
+  </div>`;
+}
+
+function renderAgenda(){
+  const wrap = document.getElementById('agenda-wrap');
+  const list = document.getElementById('agenda-list');
+  if(!wrap || !list || mainView !== 'agenda') return;
+  if(!personalTasksFirstSyncDone){ list.innerHTML = '<div class="ag-empty">Cargando...</div>'; return; }
+
+  const todayStr = todayKey();
+  const now = new Date();
+  const nowMin = now.getHours()*60 + now.getMinutes();
+  const mine = (personalTasks||[]).filter(t=>taskInvolvesPerson(t, viewerPerson));
+  const arielBusy = viewerPerson === 'ariel' ? [] :
+    (personalTasks||[]).filter(t=>t.time && taskInvolvesPerson(t,'ariel') && !taskInvolvesPerson(t, viewerPerson));
+
+  const days = [];
+  for(let i=0;i<AGENDA_DAYS;i++){
+    const d = new Date(agendaStart); d.setDate(d.getDate()+i); days.push(d);
+  }
+  const fmtShort = (d)=>d.toLocaleDateString('es-AR',{day:'numeric',month:'short'});
+  const rangeTxt = `${fmtShort(days[0])} – ${fmtShort(days[days.length-1])} ${days[days.length-1].getFullYear()}`;
+  document.getElementById('ag-range').textContent = rangeTxt;
+
+  let html = '';
+  days.forEach(d=>{
+    const dStr = dateKey(d);
+    const isToday = dStr === todayStr;
+    const dayTasks = mine.filter(t=>agendaTaskOnDate(t, dStr));
+    const allDay = dayTasks.filter(t=>!t.time).sort((a,b)=>(a.text||'').localeCompare(b.text||''));
+    const timed = dayTasks.filter(t=>t.time);
+    const busy = arielBusy.filter(t=>taskOccupiesDate(t, dStr));
+    const timedEntries = [
+      ...timed.map(t=>({t, busy:false})),
+      ...busy.map(t=>({t, busy:true}))
+    ].sort((a,b)=>a.t.time.localeCompare(b.t.time));
+
+    let items = '';
+    // Pendientes de días anteriores (tareas de una sola vez que no se tildaron)
+    if(isToday){
+      const backlog = mine.filter(t=>taskRepeatType(t)==='none' && t.dueDate && t.dueDate < todayStr && !t.resolved)
+        .sort((a,b)=>a.dueDate.localeCompare(b.dueDate));
+      if(backlog.length){
+        items += `<div class="ag-backlog-head" id="ag-backlog-toggle">
+          <span class="ag-dot" style="background:var(--red)"></span>
+          <span class="ag-time">Atrasadas</span>
+          <span class="ag-backlog-icon">${agendaBacklogOpen?'▾':'▸'}</span>
+          <span class="ag-title">${backlog.length} ${backlog.length===1?'tarea pendiente':'tareas pendientes'} de días anteriores</span>
+        </div>`;
+        if(agendaBacklogOpen){
+          items += `<div class="ag-backlog-list">${backlog.map(t=>agendaRowHtml(t, todayStr, '', 'desde ' + fmtDue(t.dueDate))).join('')}</div>`;
+        }
+      }
+    }
+    // "Todo el día" de hoy que todavía no se tildó y ya pasó el mediodía: aviso en rojo,
+    // para que no se vuelva el cajón donde se acumula todo.
+    items += allDay.map(t=>{
+      const stale = isToday && nowMin >= 12*60 && !isTaskDoneForDate(t, dStr);
+      return agendaRowHtml(t, dStr, stale ? 'allday-stale' : '', stale ? 'Sin hacer ⚠' : null);
+    }).join('');
+    let nowDrawn = !isToday;
+    timedEntries.forEach(e=>{
+      if(!nowDrawn && hhmmToMin(e.t.time) > nowMin){ items += '<div class="ag-now"></div>'; nowDrawn = true; }
+      items += e.busy ? agendaBusyRowHtml(e.t) : agendaRowHtml(e.t, dStr);
+    });
+    if(!nowDrawn && (timedEntries.length || allDay.length)) items += '<div class="ag-now"></div>';
+    if(!items) items = '<div class="ag-empty">Nada cargado</div>';
+
+    const dayName = d.toLocaleDateString('es-AR',{month:'short'}).replace('.','') + ', ' +
+      d.toLocaleDateString('es-AR',{weekday:'short'}).replace('.','');
+    html += `<div class="ag-day ${isToday?'is-today':''}">
+      <div class="ag-date"><span class="ag-daynum">${d.getDate()}</span><span class="ag-dayname">${dayName}</span></div>
+      <div class="ag-items">${items}</div>
+    </div>`;
+  });
+  list.innerHTML = html;
+
+  const bt = document.getElementById('ag-backlog-toggle');
+  if(bt) bt.addEventListener('click', ()=>{ agendaBacklogOpen = !agendaBacklogOpen; renderAgenda(); });
+  list.querySelectorAll('.ag-check').forEach(chk=>{
+    chk.addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      const t = personalTasks.find(x=>x.id===chk.dataset.id);
+      if(!t) return;
+      toggleTaskDoneForDate(t, chk.dataset.date);
+      renderAllTaskViews();
+      await saveOneTask(t);
+    });
+  });
+  list.querySelectorAll('.ag-row[data-id]').forEach(row=>{
+    row.addEventListener('click', ()=>openEditPersonalTask(row.dataset.id));
+  });
+}
+
+// La línea de "ahora" se mueve sola cada minuto.
+setInterval(()=>{ if(mainView === 'agenda') renderAgenda(); }, 60000);
+applyMainView();
 </script>
 </body>
 </html>
